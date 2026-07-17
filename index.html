@@ -206,53 +206,118 @@ function render(data){
 }
 function signIdx(en){return ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"].indexOf(en);}
 
+// ── Estilo clásico «Reporte Astral» (modelo del reporte de escritorio) ──
+// Fondo blanco · anillo de regentes de decanatos · glifos de colores ·
+// grados/minutos por planeta · aspectos: oposición roja, trígono azul,
+// cuadratura negra, sextil verde.
+const PLANET_COLOR = {aSol:"#D97B29",aLuna:"#7D7D85",aMercurio:"#8A7500",
+  aVenus:"#2E8B57",aMarte:"#C62828",aJupiter:"#6A3AB2",aSaturno:"#8B6914",
+  aUrano:"#0F9BA8",aNeptuno:"#3949AB",aPluton:"#8B1E3F",aChiron:"#4E7A6A",
+  aNoduloNorte:"#4A4A55",aNoduloSur:"#4A4A55",aLunaNegra:"#1A1A1A",
+  aRuedaFortuna:"#2E7D32"};
+const SIGN_COLOR = ["#C62828","#7C8B1A","#7B2D8E","#0F9BA8","#E07B1F","#2E7D32",
+  "#C2185B","#8B1E3F","#B13BD6","#5D4037","#00ACC1","#3949AB"];
+// Regentes de decanatos por triplicidad (sistema de la app, con Quirón)
+const DECAN_RULERS = [
+  ["aMarte","aSol","aJupiter"],   ["aVenus","aChiron","aSaturno"],
+  ["aMercurio","aVenus","aUrano"],["aLuna","aPluton","aNeptuno"],
+  ["aSol","aJupiter","aMarte"],   ["aChiron","aSaturno","aVenus"],
+  ["aVenus","aUrano","aMercurio"],["aPluton","aNeptuno","aLuna"],
+  ["aJupiter","aMarte","aSol"],   ["aSaturno","aVenus","aChiron"],
+  ["aUrano","aMercurio","aVenus"],["aNeptuno","aLuna","aPluton"]];
+const WHEEL_ASPECT_COLOR = {Opposition:"#CC0000",Trine:"#0000CC",
+  Square:"#000000",Conjunction:"#B8860B",Sextile:"#00990A"};
+
+function adjustAngles(lons, minSep){
+  // Separación angular mínima entre glifos (como en la app de escritorio)
+  const idx = lons.map((l,i)=>[l,i]).sort((a,b)=>a[0]-b[0]);
+  const adj = idx.map(x=>x[0]);
+  for(let pass=0; pass<40; pass++){
+    let moved=false;
+    for(let i=0;i<adj.length;i++){
+      const j=(i+1)%adj.length;
+      let gap = adj[j]-adj[i]; if(j===0) gap+=360;
+      if(gap < minSep){
+        const push=(minSep-gap)/2;
+        adj[i]-=push; adj[j]+=push;
+        if(j===0) adj[j]-=360;
+        moved=true;
+      }
+    }
+    if(!moved) break;
+  }
+  const out = new Array(lons.length);
+  idx.forEach((x,k)=>{ out[x[1]] = ((adj[k]%360)+360)%360; });
+  return out;
+}
+
 function drawWheel(data){
-  const S=600, C=S/2, asc=data.angles.asc.lon;
-  const rOuter=290, rSign=252, rHouse=210, rPlanet=185, rInner=140;
+  const S=500, C=250, asc=data.angles.asc.lon;
   const ang = lon => (180 + asc - lon) * Math.PI/180;
   const pt = (lon,r) => [C + r*Math.cos(ang(lon)), C + r*Math.sin(ang(lon))];
+  const IN="#1A1A29";
   let s = `<svg id="wheelSvg" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`;
-  s += `<circle cx="${C}" cy="${C}" r="${rOuter}" fill="#0C1233" stroke="#2E3866"/>`;
-  s += `<circle cx="${C}" cy="${C}" r="${rSign}" fill="none" stroke="#2E3866"/>`;
-  s += `<circle cx="${C}" cy="${C}" r="${rHouse}" fill="none" stroke="#242C55"/>`;
-  s += `<circle cx="${C}" cy="${C}" r="${rInner}" fill="none" stroke="#242C55"/>`;
+  s += `<rect width="${S}" height="${S}" fill="#FFFFFF"/>`;
+  // Círculos del modelo: 200 · 180 · 160 · 80 · 70
+  [200,180,160,80,70].forEach(r=>{
+    s+=`<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="${IN}" stroke-width="1"/>`;
+  });
+  // Divisiones de signos (160→200) y de decanatos (180→200)
   for(let i=0;i<12;i++){
-    const [x1,y1]=pt(i*30,rSign),[x2,y2]=pt(i*30,rOuter);
-    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2E3866"/>`;
-    const [gx,gy]=pt(i*30+15,(rSign+rOuter)/2);
-    s+=`<text x="${gx}" y="${gy}" font-size="20" fill="${i%2?'#AEB6D6':'#C9A24B'}" text-anchor="middle" dominant-baseline="central">${SIGN_GLYPH[i]}</text>`;
+    const l=i*30;
+    let [x1,y1]=pt(l,160),[x2,y2]=pt(l,200);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${IN}" stroke-width="1"/>`;
+    for(const d of [10,20]){
+      const [a1,b1]=pt(l+d,180),[a2,b2]=pt(l+d,200);
+      s+=`<line x1="${a1}" y1="${b1}" x2="${a2}" y2="${b2}" stroke="${IN}" stroke-width="0.6"/>`;
+    }
+    // Glifo del signo (banda 160–180)
+    const [gx,gy]=pt(l+15,170);
+    s+=`<text x="${gx}" y="${gy}" font-size="14" fill="${SIGN_COLOR[i]}" text-anchor="middle" dominant-baseline="central">${SIGN_GLYPH[i]}</text>`;
+    // Regentes de decanatos (banda 180–200)
+    DECAN_RULERS[i].forEach((rk,d)=>{
+      const [rx,ry]=pt(l+5+d*10,190);
+      s+=`<text x="${rx}" y="${ry}" font-size="9" fill="${PLANET_COLOR[rk]||'#333'}" text-anchor="middle" dominant-baseline="central">${PLANET_GLYPH[rk]||""}</text>`;
+    });
   }
+  // Cúspides de casas (80→160) y números (banda 70–80)
   data.houses.forEach(h=>{
-    const [x1,y1]=pt(h.lon,rInner),[x2,y2]=pt(h.lon,rHouse);
-    const major=(h.num%3===1);
-    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${major?'#4A5590':'#242C55'}" stroke-width="${major?1.4:1}"/>`;
-    const [nx,ny]=pt(h.lon+4,rInner+14);
-    s+=`<text x="${nx}" y="${ny}" font-size="10" fill="#8A93C0" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
+    const [x1,y1]=pt(h.lon,80),[x2,y2]=pt(h.lon,160);
+    const axis=(h.num===1||h.num===10||h.num===4||h.num===7);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${IN}" stroke-width="${axis?1.5:0.8}"/>`;
+    const [nx,ny]=pt(h.lon+5,75);
+    s+=`<text x="${nx}" y="${ny}" font-size="8" fill="#000" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
   });
-  [asc,data.angles.mc.lon,(asc+180)%360,(data.angles.mc.lon+180)%360].forEach(l=>{
-    const [x2,y2]=pt(l,rOuter);
-    s+=`<line x1="${C}" y1="${C}" x2="${x2}" y2="${y2}" stroke="#5A649A" stroke-dasharray="2 3"/>`;
-  });
+  // Aspectos sobre el círculo interior (r=70)
   const pos={}; data.planets.forEach(p=>pos[p.key]=p.lon);
   data.aspects.forEach(a=>{
-    if(pos[a.a]==null||pos[a.b]==null) return;
-    const [x1,y1]=pt(pos[a.a],rInner),[x2,y2]=pt(pos[a.b],rInner);
-    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ASPECT_COLOR[a.type]||'#888'}" stroke-width="1" opacity="0.6"/>`;
+    if(pos[a.a]==null||pos[a.b]==null||a.type==="Conjunction") return;
+    const [x1,y1]=pt(pos[a.a],70),[x2,y2]=pt(pos[a.b],70);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${WHEEL_ASPECT_COLOR[a.type]||'#666'}" stroke-width="1"/>`;
   });
-  const used=[];
-  data.planets.forEach(p=>{
-    let r=rPlanet;
-    used.forEach(u=>{ if(Math.abs(((u-p.lon+540)%360)-180)>172) r-=14; });
-    used.push(p.lon);
-    const [x,y]=pt(p.lon,r);
-    const [tx,ty]=pt(p.lon,rHouse+8);
-    s+=`<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#2E3866"/>`;
-    s+=`<text x="${x}" y="${y}" font-size="17" fill="#EEF1FB" text-anchor="middle" dominant-baseline="central">${PLANET_GLYPH[p.key]||"•"}</text>`;
-    const [dx,dy]=pt(p.lon, r-16);
-    s+=`<text x="${dx}" y="${dy}" font-size="8.5" fill="#8A93C0" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"℞":""}</text>`;
+  // Planetas con anti-solape angular (glifo + grado + mini-signo + minutos + R)
+  const lons = data.planets.map(p=>p.lon);
+  const shown = adjustAngles(lons, 7.5);
+  data.planets.forEach((p,i)=>{
+    const a = shown[i];
+    const col = PLANET_COLOR[p.key]||"#222";
+    const [x,y]=pt(a,143);
+    s+=`<text x="${x}" y="${y}" font-size="15" fill="${col}" text-anchor="middle" dominant-baseline="central">${PLANET_GLYPH[p.key]||"•"}</text>`;
+    const [dx,dy]=pt(a,124);
+    s+=`<text x="${dx}" y="${dy}" font-size="7.5" fill="#000" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
+    const [sx,sy]=pt(a,111);
+    s+=`<text x="${sx}" y="${sy}" font-size="9" fill="${SIGN_COLOR[p.sign_index-1]}" text-anchor="middle" dominant-baseline="central">${SIGN_GLYPH[p.sign_index-1]}</text>`;
+    const [mx,my]=pt(a,98);
+    s+=`<text x="${mx}" y="${my}" font-size="7" fill="#000" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
+    if(p.retrograde){
+      const [rx,ry]=pt(a,87);
+      s+=`<text x="${rx}" y="${ry}" font-size="7" fill="#CC0000" text-anchor="middle" dominant-baseline="central">R</text>`;
+    }
   });
-  const putLabel=(lbl,l)=>{const [x,y]=pt(l,rOuter-2);s+=`<text x="${x}" y="${y}" font-size="11" font-weight="bold" fill="#C9A24B" text-anchor="middle" dominant-baseline="central">${lbl}</text>`;};
-  putLabel("Asc",asc); putLabel("MC",data.angles.mc.lon);
+  // Etiquetas Ac / Mc
+  const putLbl=(t,l)=>{const [x,y]=pt(l,207);
+    s+=`<text x="${x}" y="${y}" font-size="11" font-weight="bold" fill="#000" text-anchor="middle" dominant-baseline="central">${t}</text>`;};
+  putLbl("Ac",asc); putLbl("Mc",data.angles.mc.lon);
   s+=`</svg>`;
   $("wheelWrap").innerHTML=s;
 }
@@ -268,7 +333,7 @@ function wheelToPng(size){
     img.onload = ()=>{
       const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
       const ctx=cv.getContext("2d");
-      ctx.fillStyle="#131A3E"; ctx.fillRect(0,0,size,size);
+      ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size,size);
       ctx.drawImage(img,0,0,size,size);
       resolve(cv.toDataURL("image/png"));
     };
