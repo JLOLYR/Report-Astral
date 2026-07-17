@@ -33,6 +33,7 @@
   button{background:var(--gold);color:#0B1030;border:none;border-radius:10px;
     padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
   button:hover{background:var(--gold-lt)}
+  button:disabled{opacity:.5;cursor:default}
   button.sec{background:transparent;color:var(--gold);border:1px solid var(--border);
     padding:9px 12px;font-weight:600}
   button.sec:hover{border-color:var(--gold)}
@@ -49,6 +50,8 @@
   svg{max-width:100%;height:auto}
   .foot{font-size:11px;color:var(--faint);text-align:center;padding:16px}
   .two{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  .dlbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .dlbar span{color:var(--muted);font-size:13px}
   @media(max-width:760px){.two{grid-template-columns:1fr}}
 </style>
 </head>
@@ -95,6 +98,12 @@
   </div>
 
   <div id="result" class="hidden">
+    <div class="card dlbar">
+      <span>Descargar reporte completo con interpretaciones:</span>
+      <button id="btnPdf" type="button">⬇ PDF</button>
+      <button class="sec" id="btnDocx" type="button">⬇ Word (.docx)</button>
+      <span id="dlStatus" style="color:var(--faint)"></span>
+    </div>
     <div class="two">
       <div class="card">
         <h2 id="wheelTitle">Carta natal</h2>
@@ -117,7 +126,7 @@
 <div class="foot">Reporte Astral · cálculo con Swiss Ephemeris</div>
 
 <script>
-// ⚙️ URL de tu API en Render — cambiala si tu servicio tiene otro nombre.
+// URL de tu API en Render. Cámbiala si tu servicio tiene otro nombre.
 const API_URL = "https://astral-report-api.onrender.com";
 document.getElementById("apiUrl").textContent = API_URL;
 
@@ -131,35 +140,44 @@ const ASPECT_COLOR = {Conjunction:"#C9A24B",Sextile:"#5FC9A0",Square:"#E0925A",
 const $ = id => document.getElementById(id);
 function setStatus(msg, err){ const s=$("status"); s.textContent=msg||""; s.className="status"+(err?" err":""); }
 
+let lastInput = null;
+
+function getInput(){
+  const date=$("date").value.trim(), time=$("time").value.trim()||"12:00";
+  const lat=parseFloat($("lat").value), lon=parseFloat($("lon").value);
+  const tz=$("tz").value.trim(), name=$("name").value.trim();
+  return {date,time,lat,lon,tz,name};
+}
+
 async function buscarCiudad(){
   const q = $("city").value.trim();
-  if(!q){ setStatus("Escribí una ciudad."); return; }
+  if(!q){ setStatus("Escribe una ciudad."); return; }
   setStatus("Buscando ciudad…");
   try{
     const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q),
       {headers:{"Accept":"application/json"}});
     const arr = await r.json();
-    if(!arr.length){ setStatus("No se encontró la ciudad. Podés escribir lat/lon a mano.", true); return; }
+    if(!arr.length){ setStatus("No se encontró la ciudad. Puedes escribir la latitud y longitud a mano.", true); return; }
     $("lat").value = parseFloat(arr[0].lat).toFixed(4);
     $("lon").value = parseFloat(arr[0].lon).toFixed(4);
     setStatus("Ubicación: "+arr[0].display_name);
-  }catch(e){ setStatus("No se pudo buscar la ciudad (probá lat/lon a mano).", true); }
+  }catch(e){ setStatus("No se pudo buscar la ciudad. Escribe la latitud y longitud a mano.", true); }
 }
 
 async function calcular(){
-  const date=$("date").value.trim(), time=$("time").value.trim()||"12:00";
-  const lat=parseFloat($("lat").value), lon=parseFloat($("lon").value), tz=$("tz").value.trim();
-  if(!date){ setStatus("Completá la fecha (AAAA-MM-DD).", true); return; }
-  if(isNaN(lat)||isNaN(lon)){ setStatus("Completá latitud y longitud (o buscá la ciudad).", true); return; }
-  setStatus("Calculando… (si el servidor estaba dormido, la 1ª vez tarda ~50 s)");
+  const inp = getInput();
+  if(!inp.date){ setStatus("Completa la fecha (AAAA-MM-DD).", true); return; }
+  if(isNaN(inp.lat)||isNaN(inp.lon)){ setStatus("Completa la latitud y la longitud (o busca la ciudad).", true); return; }
+  setStatus("Calculando… (si el servidor estaba en reposo, la primera vez puede tardar ~50 s)");
   try{
     const r = await fetch(API_URL+"/api/natal",{method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({date,time,lat,lon,tz})});
+      body:JSON.stringify({date:inp.date,time:inp.time,lat:inp.lat,lon:inp.lon,tz:inp.tz})});
     if(!r.ok){ setStatus("Error del servidor: "+(await r.text()), true); return; }
     const data = await r.json();
+    lastInput = inp;
     render(data);
-    setStatus("Carta calculada. Offset UTC aplicado: "+data.input.utc_offset_hours+"h");
+    setStatus("Carta calculada. Desfase UTC aplicado: "+data.input.utc_offset_hours+" h");
   }catch(e){ setStatus("No se pudo conectar con la API: "+e.message, true); }
 }
 
@@ -193,7 +211,7 @@ function drawWheel(data){
   const rOuter=290, rSign=252, rHouse=210, rPlanet=185, rInner=140;
   const ang = lon => (180 + asc - lon) * Math.PI/180;
   const pt = (lon,r) => [C + r*Math.cos(ang(lon)), C + r*Math.sin(ang(lon))];
-  let s = `<svg viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`;
+  let s = `<svg id="wheelSvg" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`;
   s += `<circle cx="${C}" cy="${C}" r="${rOuter}" fill="#0C1233" stroke="#2E3866"/>`;
   s += `<circle cx="${C}" cy="${C}" r="${rSign}" fill="none" stroke="#2E3866"/>`;
   s += `<circle cx="${C}" cy="${C}" r="${rHouse}" fill="none" stroke="#242C55"/>`;
@@ -239,8 +257,53 @@ function drawWheel(data){
   $("wheelWrap").innerHTML=s;
 }
 
+// ── Rueda SVG -> PNG (para incrustar en el reporte) ──
+function wheelToPng(size){
+  return new Promise((resolve)=>{
+    const svg = document.querySelector("#wheelWrap svg");
+    if(!svg){ resolve(null); return; }
+    const xml = new XMLSerializer().serializeToString(svg);
+    const src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+    const img = new Image();
+    img.onload = ()=>{
+      const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
+      const ctx=cv.getContext("2d");
+      ctx.fillStyle="#131A3E"; ctx.fillRect(0,0,size,size);
+      ctx.drawImage(img,0,0,size,size);
+      resolve(cv.toDataURL("image/png"));
+    };
+    img.onerror = ()=>resolve(null);
+    img.src = src;
+  });
+}
+
+async function descargar(fmt){
+  if(!lastInput){ return; }
+  const dl=$("dlStatus");
+  $("btnPdf").disabled=true; $("btnDocx").disabled=true;
+  dl.textContent="Generando… (puede tardar unos segundos)";
+  try{
+    const png = await wheelToPng(760);
+    const body = Object.assign({}, lastInput, {format:fmt, chart_png:png});
+    const r = await fetch(API_URL+"/api/report",{method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    if(!r.ok){ dl.textContent="Error: "+(await r.text()); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const nm = (lastInput.name||"Reporte_Astral").replace(/\s+/g,"_");
+    const a = document.createElement("a");
+    a.href=url; a.download = nm + (fmt==="docx"?".docx":".pdf");
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    dl.textContent="Descargado ✓";
+  }catch(e){ dl.textContent="No se pudo generar: "+e.message; }
+  finally{ $("btnPdf").disabled=false; $("btnDocx").disabled=false; }
+}
+
 $("btnCity").addEventListener("click",buscarCiudad);
 $("btnCalc").addEventListener("click",calcular);
+$("btnPdf").addEventListener("click",()=>descargar("pdf"));
+$("btnDocx").addEventListener("click",()=>descargar("docx"));
 $("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad();}});
 </script>
 </body>
