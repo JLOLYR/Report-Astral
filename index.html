@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diario Astral — Carta Natal</title>
+<style>
+  :root{
+    --bg:#F2ECFA; --card:#FFFFFF; --field:#F4EEFC; --border:#E0D6F2;
+    --ink:#2C2342; --muted:#6A5C86; --faint:#9385AE;
+    --primary:#7A4FC4; --primary-dk:#5F3AA6; --gold:#B07D1F; --mauve:#A85C9C;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;}
+  header{background:linear-gradient(90deg,#5E3FA8,#9466C0);color:#fff;
+    padding:22px 16px;text-align:center;}
+  header h1{margin:0;font-size:24px;letter-spacing:.5px}
+  header p{margin:4px 0 0;color:#D9C7EC;font-size:13px}
+  .wrap{max-width:960px;margin:0 auto;padding:16px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;margin:14px 0;}
+  h2{font-size:15px;color:var(--primary);margin:0 0 12px}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 3px}
+  input,select{width:100%;background:var(--field);border:1px solid var(--border);
+    border-radius:8px;padding:9px 10px;color:var(--ink);font-size:14px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--primary)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  button{background:var(--primary);color:#fff;border:none;border-radius:10px;
+    padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+  button:hover{background:var(--primary-dk)}
+  button.sec{background:transparent;color:var(--primary);border:1px solid var(--border);
+    padding:9px 12px;font-weight:600}
+  .full{width:100%}
+  .status{font-size:13px;color:var(--muted);min-height:18px;margin-top:8px}
+  .err{color:#A32D2D}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .glyph{font-size:16px;color:var(--primary-dk)}
+  .hidden{display:none}
+  .apibar{font-size:12px;color:var(--faint);margin-top:10px;word-break:break-all}
+  #wheelWrap{display:flex;justify-content:center}
+  svg{max-width:100%;height:auto}
+  .foot{font-size:11px;color:var(--faint);text-align:center;padding:16px}
+  .two{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>✦ Diario Astral</h1>
+  <p>Carta natal · cálculo con Swiss Ephemeris</p>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Datos de nacimiento</h2>
+    <div class="grid">
+      <div><label>Nombre (opcional)</label><input id="name" placeholder="Ej: María"></div>
+      <div><label>Zona horaria (IANA)</label>
+        <input id="tz" list="tzlist" value="America/Santiago" placeholder="America/Santiago">
+        <datalist id="tzlist">
+          <option>America/Santiago</option><option>America/Argentina/Buenos_Aires</option>
+          <option>America/Lima</option><option>America/Bogota</option><option>America/Mexico_City</option>
+          <option>Europe/Madrid</option><option>America/New_York</option><option>UTC</option>
+        </datalist>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <div><label>Fecha (AAAA-MM-DD)</label><input id="date" placeholder="1988-09-28"></div>
+      <div><label>Hora (HH:MM, 24h)</label><input id="time" value="12:00" placeholder="04:20"></div>
+    </div>
+    <div style="margin-top:10px">
+      <label>Ciudad (busca latitud/longitud)</label>
+      <div class="row">
+        <input id="city" placeholder="Ej: Temuco, Chile">
+        <button class="sec" id="btnCity" type="button">🔍 Buscar</button>
+      </div>
+    </div>
+    <div class="grid3" style="margin-top:10px">
+      <div><label>Latitud</label><input id="lat" placeholder="-38.7333"></div>
+      <div><label>Longitud</label><input id="lon" placeholder="-72.6"></div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="full" id="btnCalc" type="button">✦ Calcular carta</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="apibar">API: <span id="apiUrl"></span></div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="two">
+      <div class="card">
+        <h2 id="wheelTitle">Carta natal</h2>
+        <div id="wheelWrap"></div>
+      </div>
+      <div class="card">
+        <h2>Posiciones</h2>
+        <div id="angles" style="font-size:13px;color:var(--muted);margin-bottom:8px"></div>
+        <table><thead><tr><th></th><th>Planeta</th><th>Signo</th><th>Grado</th><th>Casa</th></tr></thead>
+        <tbody id="tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Aspectos</h2>
+      <div id="aspects" style="font-size:13px;line-height:1.9"></div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">Hecho con Swiss Ephemeris · Fábula Siderum</div>
+
+<script>
+// ⚙️ URL de tu API en Render — cambiala si tu servicio tiene otro nombre.
+const API_URL = "https://astral-report-api.onrender.com";
+document.getElementById("apiUrl").textContent = API_URL;
+
+const SIGN_GLYPH = ["♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓"];
+const SIGN_ES = ["Aries","Tauro","Géminis","Cáncer","Leo","Virgo","Libra","Escorpio","Sagitario","Capricornio","Acuario","Piscis"];
+const PLANET_GLYPH = {aSol:"☉",aLuna:"☽",aMercurio:"☿",aVenus:"♀",aMarte:"♂",aJupiter:"♃",
+  aSaturno:"♄",aUrano:"♅",aNeptuno:"♆",aPluton:"♇",aChiron:"⚷",aNoduloNorte:"☊",
+  aNoduloSur:"☋",aRuedaFortuna:"⊕",aLunaNegra:"⚸"};
+const ASPECT_COLOR = {Conjunction:"#7A4FC4",Sextile:"#1D9E75",Square:"#D85A30",
+  Trine:"#185FA5",Opposition:"#A32D2D"};
+
+const $ = id => document.getElementById(id);
+function setStatus(msg, err){ const s=$("status"); s.textContent=msg||""; s.className="status"+(err?" err":""); }
+
+async function buscarCiudad(){
+  const q = $("city").value.trim();
+  if(!q){ setStatus("Escribí una ciudad."); return; }
+  setStatus("Buscando ciudad…");
+  try{
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q),
+      {headers:{"Accept":"application/json"}});
+    const arr = await r.json();
+    if(!arr.length){ setStatus("No se encontró la ciudad. Podés escribir lat/lon a mano.", true); return; }
+    $("lat").value = parseFloat(arr[0].lat).toFixed(4);
+    $("lon").value = parseFloat(arr[0].lon).toFixed(4);
+    setStatus("Ubicación: "+arr[0].display_name);
+  }catch(e){ setStatus("No se pudo buscar la ciudad (probá lat/lon a mano).", true); }
+}
+
+async function calcular(){
+  const date=$("date").value.trim(), time=$("time").value.trim()||"12:00";
+  const lat=parseFloat($("lat").value), lon=parseFloat($("lon").value), tz=$("tz").value.trim();
+  if(!date){ setStatus("Completá la fecha (AAAA-MM-DD).", true); return; }
+  if(isNaN(lat)||isNaN(lon)){ setStatus("Completá latitud y longitud (o buscá la ciudad).", true); return; }
+  setStatus("Calculando… (si el servidor estaba dormido, la 1ª vez tarda ~50 s)");
+  try{
+    const r = await fetch(API_URL+"/api/natal",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({date,time,lat,lon,tz})});
+    if(!r.ok){ setStatus("Error del servidor: "+(await r.text()), true); return; }
+    const data = await r.json();
+    render(data);
+    setStatus("Carta calculada. Offset UTC aplicado: "+data.input.utc_offset_hours+"h");
+  }catch(e){ setStatus("No se pudo conectar con la API: "+e.message, true); }
+}
+
+function render(data){
+  $("result").classList.remove("hidden");
+  const nm = $("name").value.trim();
+  $("wheelTitle").textContent = nm ? ("Carta natal · "+nm) : "Carta natal";
+  // tabla
+  const tb=$("tbody"); tb.innerHTML="";
+  data.planets.forEach(p=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td class="glyph">${PLANET_GLYPH[p.key]||""}</td><td>${p.name}</td>
+      <td>${SIGN_GLYPH[p.sign_index-1]} ${p.sign_es||p.sign}</td>
+      <td>${p.deg}°${String(p.min).padStart(2,"0")}'${p.retrograde?" ℞":""}</td>
+      <td>${p.house}</td>`;
+    tb.appendChild(tr);
+  });
+  $("angles").innerHTML =
+    `<b>Asc</b> ${SIGN_GLYPH[data.angles.asc.sign_index? data.angles.asc.sign_index-1: signIdx(data.angles.asc.sign)]||""} ${data.angles.asc.deg}° ${data.angles.asc.sign_es||data.angles.asc.sign}
+     &nbsp;·&nbsp; <b>MC</b> ${data.angles.mc.deg}° ${data.angles.mc.sign_es||data.angles.mc.sign}`;
+  // aspectos
+  $("aspects").innerHTML = data.aspects.map(a=>{
+    const c=ASPECT_COLOR[a.type]||"#666";
+    return `<span style="color:${c}">${PLANET_GLYPH[a.a]||a.a} ${a.type_es} ${PLANET_GLYPH[a.b]||a.b}</span>
+      <span style="color:var(--faint)">(${a.orb}°)</span>`;
+  }).join(" &nbsp;·&nbsp; ") || "—";
+  drawWheel(data);
+}
+function signIdx(en){return ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"].indexOf(en);}
+
+function drawWheel(data){
+  const S=600, C=S/2, asc=data.angles.asc.lon;
+  const rOuter=290, rSign=252, rHouse=210, rPlanet=185, rInner=140;
+  // ángulo de pantalla: Asc a la izquierda, longitudes crecen en sentido horario visual
+  const ang = lon => (180 + asc - lon) * Math.PI/180;
+  const pt = (lon,r) => [C + r*Math.cos(ang(lon)), C + r*Math.sin(ang(lon))];
+  let s = `<svg viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">`;
+  s += `<circle cx="${C}" cy="${C}" r="${rOuter}" fill="#fff" stroke="#C9BEE6"/>`;
+  s += `<circle cx="${C}" cy="${C}" r="${rSign}" fill="none" stroke="#C9BEE6"/>`;
+  s += `<circle cx="${C}" cy="${C}" r="${rHouse}" fill="none" stroke="#D9CFEF"/>`;
+  s += `<circle cx="${C}" cy="${C}" r="${rInner}" fill="none" stroke="#D9CFEF"/>`;
+  // divisiones de signos + glifos
+  for(let i=0;i<12;i++){
+    const [x1,y1]=pt(i*30,rSign),[x2,y2]=pt(i*30,rOuter);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#C9BEE6"/>`;
+    const [gx,gy]=pt(i*30+15,(rSign+rOuter)/2);
+    const warm=(i%2===0);
+    s+=`<text x="${gx}" y="${gy}" font-size="20" fill="${warm?'#B07D1F':'#7A4FC4'}" text-anchor="middle" dominant-baseline="central">${SIGN_GLYPH[i]}</text>`;
+  }
+  // casas
+  data.houses.forEach(h=>{
+    const [x1,y1]=pt(h.lon,rInner),[x2,y2]=pt(h.lon,rHouse);
+    const major=(h.num%3===1);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${major?'#9B87C8':'#E0D6F2'}" stroke-width="${major?1.4:1}"/>`;
+    const [nx,ny]=pt(h.lon+4,rInner+14);
+    s+=`<text x="${nx}" y="${ny}" font-size="10" fill="#9385AE" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
+  });
+  // ejes Asc/MC destacados
+  [["Asc",asc],["MC",data.angles.mc.lon],["Dsc",(asc+180)%360],["IC",(data.angles.mc.lon+180)%360]].forEach(([lbl,l])=>{
+    const [x2,y2]=pt(l,rOuter);
+    s+=`<line x1="${C}" y1="${C}" x2="${x2}" y2="${y2}" stroke="#B9A7DC" stroke-dasharray="2 3"/>`;
+  });
+  // aspectos (en el círculo interno)
+  const pos={}; data.planets.forEach(p=>pos[p.key]=p.lon);
+  data.aspects.forEach(a=>{
+    if(pos[a.a]==null||pos[a.b]==null) return;
+    const [x1,y1]=pt(pos[a.a],rInner),[x2,y2]=pt(pos[a.b],rInner);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ASPECT_COLOR[a.type]||'#999'}" stroke-width="1" opacity="0.55"/>`;
+  });
+  // planetas (con anti-solape simple por incremento de radio)
+  const used=[];
+  data.planets.forEach(p=>{
+    let r=rPlanet;
+    used.forEach(u=>{ if(Math.abs(((u-p.lon+540)%360)-180)>172) r-=14; });
+    used.push(p.lon);
+    const [x,y]=pt(p.lon,r);
+    const [tx,ty]=pt(p.lon,rHouse+8);
+    s+=`<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#E0D6F2"/>`;
+    s+=`<text x="${x}" y="${y}" font-size="17" fill="#5F3AA6" text-anchor="middle" dominant-baseline="central">${PLANET_GLYPH[p.key]||"•"}</text>`;
+    const [dx,dy]=pt(p.lon, r-16);
+    s+=`<text x="${dx}" y="${dy}" font-size="8.5" fill="#9385AE" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"℞":""}</text>`;
+  });
+  // etiquetas Asc/MC
+  const putLabel=(lbl,l)=>{const [x,y]=pt(l,rOuter-2);s+=`<text x="${x}" y="${y}" font-size="11" font-weight="bold" fill="#5E3FA8" text-anchor="middle" dominant-baseline="central">${lbl}</text>`;};
+  putLabel("Asc",asc); putLabel("MC",data.angles.mc.lon);
+  s+=`</svg>`;
+  $("wheelWrap").innerHTML=s;
+}
+
+$("btnCity").addEventListener("click",buscarCiudad);
+$("btnCalc").addEventListener("click",calcular);
+$("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad();}});
+</script>
+</body>
+</html>
