@@ -6,6 +6,7 @@
 <title>Reporte Astral — Carta Natal</title>
 <style>
   :root{
+    color-scheme: dark;
     --bg:#0B1030; --bg2:#0E1436; --card:#131A3E; --field:#1A2148; --border:#2A335F;
     --ink:#E8ECF8; --muted:#AEB6D6; --faint:#6E77A0;
     --gold:#C9A24B; --gold-lt:#D8B25E; --blue:#3A4488; --silver:#AEB6D6;
@@ -78,8 +79,8 @@
       </div>
     </div>
     <div class="grid" style="margin-top:10px">
-      <div><label>Fecha (AAAA-MM-DD)</label><input id="date" placeholder="1988-09-28"></div>
-      <div><label>Hora (HH:MM, 24h)</label><input id="time" value="12:00" placeholder="04:20"></div>
+      <div><label>Fecha de nacimiento</label><input id="date" type="date"></div>
+      <div><label>Hora (24 h)</label><input id="time" type="time" value="12:00"></div>
     </div>
     <div style="margin-top:10px">
       <label>Ciudad (busca latitud/longitud)</label>
@@ -94,6 +95,12 @@
       <div style="display:flex;align-items:flex-end">
         <button class="full" id="btnCalc" type="button">✦ Calcular carta</button>
       </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="sec" id="btnHoy" type="button">🕐 Carta de este momento</button>
+      <button class="sec" id="btnSave" type="button">💾 Guardar carta</button>
+      <select id="savedSel" style="flex:1"><option value="">— cartas guardadas —</option></select>
+      <button class="sec" id="btnDel" type="button" title="Eliminar la carta seleccionada">🗑</button>
     </div>
     <div class="status" id="status"></div>
     <div class="apibar">API: <span id="apiUrl"></span></div>
@@ -121,6 +128,10 @@
     <div class="card">
       <h2>Aspectos</h2>
       <div id="aspects" style="font-size:13px;line-height:2.1"></div>
+    </div>
+    <div class="card">
+      <h2>Leyenda de símbolos</h2>
+      <div id="legend" style="font-size:12.5px;line-height:2.2"></div>
     </div>
   </div>
 </div>
@@ -275,10 +286,10 @@ function buildWheelSVG(data, theme){
   const shown = adjustAngles(lons, 7.5);
   data.planets.forEach((p,i)=>{
     const a = shown[i];
-    s += img(p.key, a, 143, 15, dark);
-    const [dx,dy]=pt(a,124);
+    s += img(p.key, a, 142, 19, dark);
+    const [dx,dy]=pt(a,123);
     s+=`<text x="${dx}" y="${dy}" font-size="7.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
-    s += img(SIGN_KEYS[p.sign_index-1], a, 111, 10, dark);
+    s += img(SIGN_KEYS[p.sign_index-1], a, 110, 12, dark);
     const [mx,my]=pt(a,98);
     s+=`<text x="${mx}" y="${my}" font-size="7" fill="${TXT2}" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
     if(p.retrograde){
@@ -361,10 +372,78 @@ async function descargar(fmt){
   finally{ $("btnPdf").disabled=false; $("btnDocx").disabled=false; }
 }
 
+// ── Leyenda de símbolos ─────────────────────────────────────────────────
+const LEGEND_PLANETS=[["aSol","Sol"],["aLuna","Luna"],["aMercurio","Mercurio"],
+ ["aVenus","Venus"],["aTierra","Tierra"],["aMarte","Marte"],["aJupiter","Júpiter"],
+ ["aSaturno","Saturno"],["aChiron","Quirón"],["aUrano","Urano"],["aNeptuno","Neptuno"],
+ ["aPluton","Plutón"],["aNoduloNorte","Nodo Norte"],["aNoduloSur","Nodo Sur"],
+ ["aLunaNegra","Luna Negra"],["aRuedaFortuna","R. Fortuna"]];
+const LEGEND_SIGNS=[["Aries","Aries"],["Taurus","Tauro"],["Gemini","Géminis"],
+ ["Cancer","Cáncer"],["Leo","Leo"],["Virgo","Virgo"],["Libra","Libra"],
+ ["Scorpio","Escorpio"],["Sagittarius","Sagitario"],["Capricorn","Capricornio"],
+ ["Aquarius","Acuario"],["Pisces","Piscis"]];
+function renderLegend(){
+  const mk=arr=>arr.map(([k,n])=>`<span style="white-space:nowrap;margin-right:14px">${icn(k,"sm")} ${n}</span>`).join(" ");
+  $("legend").innerHTML =
+    `<div style="color:var(--gold);font-size:12px;margin-bottom:4px">Planetas y puntos</div>${mk(LEGEND_PLANETS)}
+     <div style="color:var(--gold);font-size:12px;margin:10px 0 4px">Signos</div>${mk(LEGEND_SIGNS)}`;
+}
+renderLegend();
+
+// ── Cartas guardadas (en este navegador) ────────────────────────────────
+const LS_KEY="ra_cartas";
+function loadSaved(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch(e){ return {}; } }
+function refreshSavedSel(){
+  const sel=$("savedSel"), saved=loadSaved();
+  sel.innerHTML='<option value="">— cartas guardadas —</option>';
+  Object.keys(saved).sort().forEach(k=>{
+    const o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o);
+  });
+}
+function guardarCarta(){
+  const inp=getInput();
+  if(!inp.date||isNaN(inp.lat)){ setStatus("Completa los datos antes de guardar.", true); return; }
+  const nombre = inp.name || ("Carta "+inp.date);
+  const saved=loadSaved(); saved[nombre]=inp;
+  localStorage.setItem(LS_KEY, JSON.stringify(saved));
+  refreshSavedSel(); $("savedSel").value=nombre;
+  setStatus(`Carta «${nombre}» guardada en este navegador.`);
+}
+function cargarCarta(nombre){
+  const c=loadSaved()[nombre]; if(!c) return;
+  $("name").value=c.name||""; $("date").value=c.date||""; $("time").value=c.time||"12:00";
+  $("lat").value=c.lat; $("lon").value=c.lon; $("tz").value=c.tz||"";
+  setStatus(`Carta «${nombre}» cargada. Presiona «Calcular carta».`);
+}
+function eliminarCarta(){
+  const sel=$("savedSel"); if(!sel.value) return;
+  const saved=loadSaved(); delete saved[sel.value];
+  localStorage.setItem(LS_KEY, JSON.stringify(saved));
+  refreshSavedSel(); setStatus("Carta eliminada.");
+}
+refreshSavedSel();
+
+// ── Carta de este momento ───────────────────────────────────────────────
+function cartaDeHoy(){
+  const now=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  $("date").value = now.getFullYear()+"-"+p(now.getMonth()+1)+"-"+p(now.getDate());
+  $("time").value = p(now.getHours())+":"+p(now.getMinutes());
+  if(!isNaN(parseFloat($("lat").value)) && !isNaN(parseFloat($("lon").value))){
+    calcular();
+  }else{
+    setStatus("Fecha y hora actuales listas. Busca la ciudad y presiona «Calcular carta».");
+  }
+}
+
 $("btnCity").addEventListener("click",buscarCiudad);
 $("btnCalc").addEventListener("click",calcular);
 $("btnPdf").addEventListener("click",()=>descargar("pdf"));
 $("btnDocx").addEventListener("click",()=>descargar("docx"));
+$("btnHoy").addEventListener("click",cartaDeHoy);
+$("btnSave").addEventListener("click",guardarCarta);
+$("btnDel").addEventListener("click",eliminarCarta);
+$("savedSel").addEventListener("change",e=>{ if(e.target.value) cargarCarta(e.target.value); });
 $("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad();}});
 </script>
 </body>
