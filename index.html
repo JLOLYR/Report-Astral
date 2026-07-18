@@ -98,7 +98,14 @@
     <div class="row" style="margin-top:10px">
       <button class="sec" id="btnHoy" type="button">🕐 Carta de este momento</button>
       <button class="sec" id="btnSave" type="button">💾 Guardar carta</button>
-      <select id="savedSel" style="flex:1"><option value="">— cartas guardadas —</option></select>
+      <input id="folder" list="folderlist" placeholder="Carpeta (opcional)" style="max-width:170px"
+             title="Carpeta donde se guarda esta carta">
+      <datalist id="folderlist"></datalist>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="searchBox" placeholder="🔎 Buscar carta guardada…" style="flex:1">
+      <select id="folderFilter" style="max-width:180px"><option value="">Todas las carpetas</option></select>
+      <select id="savedSel" style="flex:1.4"><option value="">— cartas guardadas —</option></select>
       <button class="sec" id="btnEdit" type="button" title="Guardar los cambios en la carta seleccionada">✏ Actualizar</button>
       <button class="sec" id="btnDel" type="button" title="Eliminar la carta seleccionada">🗑</button>
     </div>
@@ -111,6 +118,9 @@
       <span>Descargar reporte completo con interpretaciones:</span>
       <button id="btnPdf" type="button">⬇ PDF</button>
       <button class="sec" id="btnDocx" type="button">⬇ Word (.docx)</button>
+      <span style="margin-left:auto">Astrólogo:</span>
+      <input id="astrologer" value="Mauricio Puerta" style="max-width:200px"
+             title="Nombre del astrólogo que aparece en la portada del reporte">
       <span id="dlStatus" style="color:var(--faint)"></span>
     </div>
     <div class="two">
@@ -172,7 +182,8 @@ function getInput(){
   const date=$("date").value.trim(), time=$("time").value.trim()||"12:00";
   const lat=parseFloat($("lat").value), lon=parseFloat($("lon").value);
   const tz=$("tz").value.trim(), name=$("name").value.trim();
-  return {date,time,lat,lon,tz,name};
+  const city=$("city").value.trim();
+  return {date,time,lat,lon,tz,name,city};
 }
 
 async function buscarCiudad(){
@@ -362,7 +373,9 @@ async function descargar(fmt){
   dl.textContent="Generando… (puede tardar unos segundos)";
   try{
     const png = await wheelToPng(900);
-    const body = Object.assign({}, lastInput, {format:fmt, chart_png:png});
+    const body = Object.assign({}, lastInput, {format:fmt, chart_png:png,
+      city: $("city").value.trim(),
+      astrologer: $("astrologer").value.trim()});
     const r = await fetch(API_URL+"/api/report",{method:"POST",
       headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     if(!r.ok){ dl.textContent="Error: "+(await r.text()); return; }
@@ -396,51 +409,88 @@ function renderLegend(){
 }
 renderLegend();
 
-// ── Cartas guardadas (en este navegador) ────────────────────────────────
+// ── Cartas guardadas (en este navegador), con carpetas y búsqueda ───────
 const LS_KEY="ra_cartas";
 function loadSaved(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch(e){ return {}; } }
+function saveAll(o){ localStorage.setItem(LS_KEY, JSON.stringify(o)); }
+
+function allFolders(){
+  const saved=loadSaved();
+  const set=new Set();
+  Object.values(saved).forEach(c=>{ if(c.folder) set.add(c.folder); });
+  return [...set].sort();
+}
+function refreshFolderControls(){
+  const folders=allFolders();
+  $("folderlist").innerHTML = folders.map(f=>`<option value="${f}">`).join("");
+  const ff=$("folderFilter"), cur=ff.value;
+  ff.innerHTML='<option value="">Todas las carpetas</option>'
+    + '<option value="__none__">(Sin carpeta)</option>'
+    + folders.map(f=>`<option value="${f}">📁 ${f}</option>`).join("");
+  ff.value=cur;
+}
 function refreshSavedSel(){
   const sel=$("savedSel"), saved=loadSaved();
-  sel.innerHTML='<option value="">— cartas guardadas —</option>';
-  Object.keys(saved).sort().forEach(k=>{
-    const o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o);
+  const q=($("searchBox").value||"").toLowerCase().trim();
+  const ff=$("folderFilter").value;
+  const prev=sel.value;
+  const keys=Object.keys(saved).filter(k=>{
+    const c=saved[k];
+    if(q && !k.toLowerCase().includes(q)) return false;
+    if(ff==="__none__" && c.folder) return false;
+    if(ff && ff!=="__none__" && c.folder!==ff) return false;
+    return true;
+  }).sort((a,b)=>{
+    const fa=(saved[a].folder||"~"), fb=(saved[b].folder||"~");
+    return fa===fb ? a.localeCompare(b) : fa.localeCompare(fb);
   });
+  sel.innerHTML='<option value="">— cartas guardadas ('+keys.length+') —</option>';
+  keys.forEach(k=>{
+    const c=saved[k];
+    const o=document.createElement("option"); o.value=k;
+    o.textContent=(c.folder?("📁 "+c.folder+" · "):"")+k; sel.appendChild(o);
+  });
+  if(keys.includes(prev)) sel.value=prev;
 }
+function refreshSaved(){ refreshFolderControls(); refreshSavedSel(); }
+
 function guardarCarta(){
   const inp=getInput();
   if(!inp.date||isNaN(inp.lat)){ setStatus("Completa los datos antes de guardar.", true); return; }
+  inp.folder=$("folder").value.trim();
   const nombre = inp.name || ("Carta "+inp.date);
-  const saved=loadSaved(); saved[nombre]=inp;
-  localStorage.setItem(LS_KEY, JSON.stringify(saved));
-  refreshSavedSel(); $("savedSel").value=nombre;
-  setStatus(`Carta «${nombre}» guardada en este navegador.`);
+  const saved=loadSaved(); saved[nombre]=inp; saveAll(saved);
+  refreshSaved(); $("savedSel").value=nombre;
+  setStatus(`Carta «${nombre}» guardada${inp.folder?(" en 📁 "+inp.folder):""}.`);
 }
 function cargarCarta(nombre){
   const c=loadSaved()[nombre]; if(!c) return;
   $("name").value=c.name||""; $("date").value=c.date||""; $("time").value=c.time||"12:00";
   $("lat").value=c.lat; $("lon").value=c.lon; $("tz").value=c.tz||"";
+  $("folder").value=c.folder||"";
+  if(c.city!==undefined) $("city").value=c.city||"";
   setStatus(`Carta «${nombre}» cargada. Presiona «Calcular carta».`);
 }
 function eliminarCarta(){
   const sel=$("savedSel"); if(!sel.value) return;
-  const saved=loadSaved(); delete saved[sel.value];
-  localStorage.setItem(LS_KEY, JSON.stringify(saved));
-  refreshSavedSel(); setStatus("Carta eliminada.");
+  if(!confirm("¿Eliminar la carta «"+sel.value+"»?")) return;
+  const saved=loadSaved(); delete saved[sel.value]; saveAll(saved);
+  refreshSaved(); setStatus("Carta eliminada.");
 }
 function actualizarCarta(){
   const sel=$("savedSel");
   if(!sel.value){ setStatus("Selecciona primero una carta guardada para actualizarla.", true); return; }
   const inp=getInput();
   if(!inp.date||isNaN(inp.lat)){ setStatus("Completa los datos antes de actualizar.", true); return; }
+  inp.folder=$("folder").value.trim();
   const saved=loadSaved();
   const nuevoNombre = inp.name || sel.value;
   delete saved[sel.value];
-  saved[nuevoNombre]=inp;
-  localStorage.setItem(LS_KEY, JSON.stringify(saved));
-  refreshSavedSel(); $("savedSel").value=nuevoNombre;
-  setStatus(`Carta «${nuevoNombre}» actualizada con los datos del formulario.`);
+  saved[nuevoNombre]=inp; saveAll(saved);
+  refreshSaved(); $("savedSel").value=nuevoNombre;
+  setStatus(`Carta «${nuevoNombre}» actualizada.`);
 }
-refreshSavedSel();
+refreshSaved();
 
 // ── Carta de este momento ───────────────────────────────────────────────
 function cartaDeHoy(){
@@ -464,6 +514,8 @@ $("btnSave").addEventListener("click",guardarCarta);
 $("btnEdit").addEventListener("click",actualizarCarta);
 $("btnDel").addEventListener("click",eliminarCarta);
 $("savedSel").addEventListener("change",e=>{ if(e.target.value) cargarCarta(e.target.value); });
+$("searchBox").addEventListener("input",refreshSavedSel);
+$("folderFilter").addEventListener("change",refreshSavedSel);
 $("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad();}});
 </script>
 </body>
