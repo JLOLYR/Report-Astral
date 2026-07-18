@@ -54,6 +54,17 @@
   .dlbar span{color:var(--muted);font-size:13px}
   .icn{width:16px;height:16px;vertical-align:-3px}
   .icn.sm{width:14px;height:14px}
+  .typebar{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
+  .tbtn{background:var(--field);color:var(--muted);border:1px solid var(--border);
+    border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .tbtn:hover{border-color:var(--gold)}
+  .tbtn.active{background:var(--gold);color:#0B1030;border-color:var(--gold)}
+  .subblk{border-top:1px dashed var(--border);margin-top:14px;padding-top:12px}
+  .subblk h2{color:var(--silver)}
+  .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin:0}
+  .wheelrow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .wheelbox{flex:1;min-width:250px;text-align:center}
+  .wheelbox .cap{font-size:12px;color:var(--gold);margin-bottom:4px}
   @media(max-width:760px){.two{grid-template-columns:1fr}}
 </style>
 </head>
@@ -64,8 +75,15 @@
 </header>
 
 <div class="wrap">
+  <div class="typebar">
+    <button type="button" class="tbtn active" data-type="natal">✦ Natal</button>
+    <button type="button" class="tbtn" data-type="transit">☿ Tránsitos</button>
+    <button type="button" class="tbtn" data-type="solar_return">☀ Retorno solar</button>
+    <button type="button" class="tbtn" data-type="progressed">◑ Progresada</button>
+    <button type="button" class="tbtn" data-type="combined">⊕ Combinada</button>
+  </div>
   <div class="card">
-    <h2>Datos de nacimiento</h2>
+    <h2 id="baseTitle">Datos de nacimiento</h2>
     <div class="grid">
       <div><label>Nombre (opcional)</label><input id="name" placeholder="Ej: María"></div>
       <div><label>Zona horaria (IANA)</label>
@@ -82,31 +100,100 @@
       <div><label>Hora (24 h)</label><input id="time" type="time" value="12:00"></div>
     </div>
     <div style="margin-top:10px">
-      <label>Ciudad (busca latitud/longitud)</label>
+      <label>Ciudad de nacimiento</label>
       <div class="row">
         <input id="city" placeholder="Ej: Temuco, Chile">
-        <button class="sec" id="btnCity" type="button">🔍 Buscar</button>
+        <button class="sec" type="button" onclick="buscarCiudad('')">🔍 Buscar</button>
       </div>
     </div>
     <div class="grid3" style="margin-top:10px">
       <div><label>Latitud</label><input id="lat" placeholder="-38.7333"></div>
       <div><label>Longitud</label><input id="lon" placeholder="-72.6"></div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="full" id="btnCalc" type="button">✦ Calcular carta</button>
+      <div><label>Usar carta guardada como base</label>
+        <select id="baseSel"><option value="">— ninguna —</option></select></div>
+    </div>
+
+    <div id="blk_transit" class="subblk hidden">
+      <h2>Momento del tránsito</h2>
+      <div class="grid">
+        <div><label>Fecha del tránsito</label><input id="t_date" type="date"></div>
+        <div><label>Hora del tránsito</label><input id="t_time" type="time" value="12:00"></div>
+      </div>
+      <div class="row" style="margin-top:8px;align-items:center">
+        <button class="sec" type="button" id="btnTHoy">🕐 Tránsito de hoy</button>
+        <label class="chk"><input type="checkbox" id="t_reloc"> Relocalizar (calcular en otro lugar)</label>
+      </div>
+      <div id="t_locblk" class="hidden" style="margin-top:8px">
+        <div class="row"><input id="t_city" placeholder="Ciudad del tránsito">
+          <button class="sec" type="button" onclick="buscarCiudad('t_')">🔍</button></div>
+        <div class="grid3" style="margin-top:8px">
+          <div><label>Latitud</label><input id="t_lat"></div>
+          <div><label>Longitud</label><input id="t_lon"></div>
+          <div><label>Zona horaria</label><input id="t_tz" placeholder="America/Santiago"></div>
+        </div>
       </div>
     </div>
-    <div class="row" style="margin-top:10px">
-      <button class="sec" id="btnHoy" type="button">🕐 Carta de este momento</button>
+
+    <div id="blk_solar_return" class="subblk hidden">
+      <h2>Retorno solar</h2>
+      <div class="grid">
+        <div><label>Año del retorno</label><input id="r_year" type="number" min="1900" max="2100" placeholder="2026"></div>
+        <div style="display:flex;align-items:flex-end">
+          <label class="chk"><input type="checkbox" id="r_reloc"> Relocalizar (dónde estás ese cumpleaños)</label></div>
+      </div>
+      <div id="r_locblk" class="hidden" style="margin-top:8px">
+        <div class="row"><input id="r_city" placeholder="Ciudad del retorno">
+          <button class="sec" type="button" onclick="buscarCiudad('r_')">🔍</button></div>
+        <div class="grid" style="margin-top:8px">
+          <div><label>Latitud</label><input id="r_lat"></div>
+          <div><label>Longitud</label><input id="r_lon"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="blk_progressed" class="subblk hidden">
+      <h2>Progresión secundaria</h2>
+      <div class="grid">
+        <div><label>Fecha objetivo (edad a estudiar)</label><input id="p_date" type="date"></div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="sec" type="button" id="btnPHoy">📅 Hasta hoy</button></div>
+      </div>
+    </div>
+
+    <div id="blk_combined" class="subblk hidden">
+      <h2>Persona 2</h2>
+      <div class="grid">
+        <div><label>Nombre</label><input id="b_name" placeholder="Ej: Juan"></div>
+        <div><label>Zona horaria (IANA)</label><input id="b_tz" value="America/Santiago"></div>
+      </div>
+      <div class="grid" style="margin-top:8px">
+        <div><label>Fecha</label><input id="b_date" type="date"></div>
+        <div><label>Hora</label><input id="b_time" type="time" value="12:00"></div>
+      </div>
+      <div style="margin-top:8px"><label>Ciudad</label>
+        <div class="row"><input id="b_city" placeholder="Ciudad">
+          <button class="sec" type="button" onclick="buscarCiudad('b_')">🔍</button></div></div>
+      <div class="grid3" style="margin-top:8px">
+        <div><label>Latitud</label><input id="b_lat"></div>
+        <div><label>Longitud</label><input id="b_lon"></div>
+        <div><label>Usar carta guardada</label>
+          <select id="bSel"><option value="">— ninguna —</option></select></div>
+      </div>
+    </div>
+
+    <button class="full" id="btnCalc" type="button" style="margin-top:16px">✦ Calcular carta</button>
+
+    <div class="row" style="margin-top:12px">
       <button class="sec" id="btnSave" type="button">💾 Guardar carta</button>
-      <input id="folder" list="folderlist" placeholder="Carpeta (opcional)" style="max-width:170px"
+      <input id="folder" list="folderlist" placeholder="Carpeta (opcional)" style="max-width:150px"
              title="Carpeta donde se guarda esta carta">
       <datalist id="folderlist"></datalist>
     </div>
     <div class="row" style="margin-top:8px">
       <input id="searchBox" placeholder="🔎 Buscar carta guardada…" style="flex:1">
-      <select id="folderFilter" style="max-width:180px"><option value="">Todas las carpetas</option></select>
+      <select id="folderFilter" style="max-width:160px"><option value="">Todas las carpetas</option></select>
       <select id="savedSel" style="flex:1.4"><option value="">— cartas guardadas —</option></select>
-      <button class="sec" id="btnEdit" type="button" title="Guardar los cambios en la carta seleccionada">✏ Actualizar</button>
+      <button class="sec" id="btnEdit" type="button" title="Actualizar la carta seleccionada">✏</button>
       <button class="sec" id="btnDel" type="button" title="Eliminar la carta seleccionada">🗑</button>
     </div>
     <div class="status" id="status"></div>
@@ -178,57 +265,100 @@ function icn(key, cls){ const src=(ICONS_D[key]||ICONS[key]); return src ? `<img
 
 let lastInput = null, lastData = null;
 
-function getInput(){
-  const date=$("date").value.trim(), time=$("time").value.trim()||"12:00";
-  const lat=parseFloat($("lat").value), lon=parseFloat($("lon").value);
-  const tz=$("tz").value.trim(), name=$("name").value.trim();
-  const city=$("city").value.trim();
-  return {date,time,lat,lon,tz,name,city};
+function numv(id){ return parseFloat($(id).value); }
+function getBase(){
+  return {date:$("date").value.trim(), time:$("time").value.trim()||"12:00",
+    lat:numv("lat"), lon:numv("lon"), tz:$("tz").value.trim(),
+    name:$("name").value.trim(), city:$("city").value.trim()};
 }
+function bd(o){ return {date:o.date,time:o.time,lat:o.lat,lon:o.lon,tz:o.tz}; }
 
-async function buscarCiudad(){
-  const q = $("city").value.trim();
+async function buscarCiudad(pfx){
+  pfx=pfx||"";
+  const q=$(pfx+"city").value.trim();
   if(!q){ setStatus("Escribe una ciudad."); return; }
   setStatus("Buscando ciudad…");
   try{
-    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q="+encodeURIComponent(q),
-      {headers:{"Accept":"application/json"}});
-    const arr = await r.json();
-    if(!arr.length){ setStatus("No se encontró la ciudad. Puedes escribir la latitud y longitud a mano.", true); return; }
-    $("lat").value = parseFloat(arr[0].lat).toFixed(4);
-    $("lon").value = parseFloat(arr[0].lon).toFixed(4);
-    // Componer "Ciudad, País" para la portada del reporte
-    const ad = arr[0].address || {};
-    const loc = ad.city||ad.town||ad.village||ad.municipality||ad.county||ad.state||"";
-    const pais = ad.country||"";
-    $("city").value = [loc, pais].filter(Boolean).join(", ") || q;
+    const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q="+encodeURIComponent(q),{headers:{"Accept":"application/json"}});
+    const arr=await r.json();
+    if(!arr.length){ setStatus("No se encontró la ciudad. Escribe latitud y longitud a mano.",true); return; }
+    $(pfx+"lat").value=parseFloat(arr[0].lat).toFixed(4);
+    $(pfx+"lon").value=parseFloat(arr[0].lon).toFixed(4);
+    const ad=arr[0].address||{};
+    const loc=ad.city||ad.town||ad.village||ad.municipality||ad.county||ad.state||"";
+    const pais=ad.country||"";
+    $(pfx+"city").value=[loc,pais].filter(Boolean).join(", ")||q;
     setStatus("Ubicación: "+arr[0].display_name);
-  }catch(e){ setStatus("No se pudo buscar la ciudad. Escribe la latitud y longitud a mano.", true); }
+  }catch(e){ setStatus("No se pudo buscar la ciudad. Escribe latitud y longitud a mano.",true); }
+}
+
+// ── Tipo de carta ───────────────────────────────────────────────────────
+let currentType="natal", lastType="natal", lastResult=null, lastBase=null, lastPayload=null;
+const TYPE_LABEL={natal:"Datos de nacimiento",transit:"Datos natales (persona base)",
+  solar_return:"Datos natales (persona base)",progressed:"Datos natales (persona base)",combined:"Persona 1"};
+const CALC_LABEL={natal:"✦ Calcular carta",transit:"☿ Calcular tránsitos",
+  solar_return:"☀ Calcular retorno solar",progressed:"◑ Calcular progresada",combined:"⊕ Calcular combinada"};
+function setType(t){
+  currentType=t;
+  document.querySelectorAll(".tbtn").forEach(b=>b.classList.toggle("active",b.dataset.type===t));
+  $("baseTitle").textContent=TYPE_LABEL[t];
+  ["transit","solar_return","progressed","combined"].forEach(k=>$("blk_"+k).classList.toggle("hidden",k!==t));
+  $("btnCalc").textContent=CALC_LABEL[t];
 }
 
 async function calcular(){
-  const inp = getInput();
-  if(!inp.date){ setStatus("Completa la fecha (AAAA-MM-DD).", true); return; }
-  if(isNaN(inp.lat)||isNaN(inp.lon)){ setStatus("Completa la latitud y la longitud (o busca la ciudad).", true); return; }
-  setStatus("Calculando… (si el servidor estaba en reposo, la primera vez puede tardar ~50 s)");
+  const base=getBase();
+  if(!base.date){ setStatus("Completa la fecha de nacimiento.",true); return; }
+  if(isNaN(base.lat)||isNaN(base.lon)){ setStatus("Completa latitud y longitud (o busca la ciudad).",true); return; }
+  let endpoint, body;
+  if(currentType==="natal"){ endpoint="/api/natal"; body=bd(base); }
+  else if(currentType==="transit"){
+    if(!$("t_date").value){ setStatus("Completa la fecha del tránsito.",true); return; }
+    const reloc = $("t_reloc").checked && !isNaN(numv("t_lat"));
+    const tlat = reloc?numv("t_lat"):base.lat, tlon = reloc?numv("t_lon"):base.lon;
+    const ttz = $("t_tz").value.trim() || base.tz;
+    endpoint="/api/transits";
+    body={natal:bd(base), transit:{date:$("t_date").value,time:$("t_time").value||"12:00",lat:tlat,lon:tlon,tz:ttz}};
+  }
+  else if(currentType==="solar_return"){
+    const yr=parseInt($("r_year").value);
+    if(!yr){ setStatus("Escribe el año del retorno.",true); return; }
+    endpoint="/api/solar_return";
+    body={natal:bd(base), year:yr,
+      reloc: ($("r_reloc").checked && !isNaN(numv("r_lat")))?{lat:numv("r_lat"),lon:numv("r_lon"),tz:""}:null};
+  }
+  else if(currentType==="progressed"){
+    if(!$("p_date").value){ setStatus("Completa la fecha objetivo.",true); return; }
+    endpoint="/api/progressed";
+    body={natal:bd(base), target_date:$("p_date").value};
+  }
+  else {
+    if(!$("b_date").value||isNaN(numv("b_lat"))){ setStatus("Completa los datos de la Persona 2.",true); return; }
+    endpoint="/api/combined";
+    body={person_a:bd(base), person_b:{date:$("b_date").value,time:$("b_time").value||"12:00",lat:numv("b_lat"),lon:numv("b_lon"),tz:$("b_tz").value.trim()}};
+  }
+  setStatus("Calculando… (la primera vez puede tardar ~50 s si el servidor estaba en reposo)");
   try{
-    const r = await fetch(API_URL+"/api/natal",{method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({date:inp.date,time:inp.time,lat:inp.lat,lon:inp.lon,tz:inp.tz})});
-    if(!r.ok){ setStatus("Error del servidor: "+(await r.text()), true); return; }
-    const data = await r.json();
-    lastInput = inp; lastData = data;
-    render(data);
-    setStatus("Carta calculada. Desfase UTC aplicado: "+data.input.utc_offset_hours+" h");
-  }catch(e){ setStatus("No se pudo conectar con la API: "+e.message, true); }
+    const r=await fetch(API_URL+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){ setStatus("Error del servidor: "+(await r.text()),true); return; }
+    const data=await r.json();
+    lastType=currentType; lastResult=data; lastBase=base;
+    lastPayload = (currentType==="natal") ? {natal:body} : body;
+    renderResult(currentType,data);
+    setStatus("Carta calculada.");
+  }catch(e){ setStatus("No se pudo conectar con la API: "+e.message,true); }
 }
 
-function render(data){
-  $("result").classList.remove("hidden");
-  const nm = $("name").value.trim();
-  $("wheelTitle").textContent = nm ? ("Carta natal · "+nm) : "Carta natal";
+function primaryChart(type,data){
+  if(type==="transit") return data.transit;
+  if(type==="solar_return") return data.solar_return;
+  if(type==="progressed") return data.progressed;
+  if(type==="combined") return data.combined;
+  return data;
+}
+function fillTable(chart){
   const tb=$("tbody"); tb.innerHTML="";
-  data.planets.forEach(p=>{
+  (chart.planets||[]).forEach(p=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${icn(p.key)}</td><td>${p.name}</td>
       <td>${icn(SIGN_KEYS[p.sign_index-1],"sm")} ${p.sign_es||p.sign}</td>
@@ -236,25 +366,42 @@ function render(data){
       <td>${p.house}</td>`;
     tb.appendChild(tr);
   });
-  const ascIdx=(lonSignIdx(data.angles.asc.lon)), mcIdx=(lonSignIdx(data.angles.mc.lon));
+  const ascIdx=lonSignIdx(chart.angles.asc.lon), mcIdx=lonSignIdx(chart.angles.mc.lon);
   $("angles").innerHTML =
-    `<b style="color:var(--gold)">Asc</b> ${icn(SIGN_KEYS[ascIdx],"sm")} ${data.angles.asc.deg}° ${data.angles.asc.sign_es||data.angles.asc.sign}
-     &nbsp;·&nbsp; <b style="color:var(--gold)">MC</b> ${icn(SIGN_KEYS[mcIdx],"sm")} ${data.angles.mc.deg}° ${data.angles.mc.sign_es||data.angles.mc.sign}`;
-  const ASPECT_TXT = {Conjunction:"#C9A24B",Sextile:"#5FC9A0",Square:"#E0925A",
-    Trine:"#5FA8E0",Opposition:"#E06A6A"};
-  $("aspects").innerHTML = data.aspects.map(a=>{
-    const c=ASPECT_TXT[a.type]||"#888";
-    return `<span style="white-space:nowrap">${icn(a.a,"sm")} <span style="color:${c}">${a.type_es}</span> ${icn(a.b,"sm")}
-      <span style="color:var(--faint)">(${a.orb}°)</span></span>`;
-  }).join(" &nbsp; ") || "—";
-  drawWheel(data);
+    `<b style="color:var(--gold)">Asc</b> ${icn(SIGN_KEYS[ascIdx],"sm")} ${chart.angles.asc.deg}° ${chart.angles.asc.sign_es}
+     &nbsp;·&nbsp; <b style="color:var(--gold)">MC</b> ${icn(SIGN_KEYS[mcIdx],"sm")} ${chart.angles.mc.deg}° ${chart.angles.mc.sign_es}`;
+  const AC={Conjunction:"#C9A24B",Sextile:"#5FC9A0",Square:"#E0925A",Trine:"#5FA8E0",Opposition:"#E06A6A"};
+  $("aspects").innerHTML=(chart.aspects||[]).map(a=>{
+    const c=AC[a.type]||"#888";
+    return `<span style="white-space:nowrap">${icn(a.a,"sm")} <span style="color:${c}">${a.type_es}</span> ${icn(a.b,"sm")} <span style="color:var(--faint)">(${a.orb}°)</span></span>`;
+  }).join(" &nbsp; ")||"—";
+}
+function renderResult(type,data){
+  $("result").classList.remove("hidden");
+  const nm=$("name").value.trim();
+  const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada"};
+  $("wheelTitle").textContent=titles[type]+(nm?(" · "+nm):"");
+  fillTable(primaryChart(type,data));
+  let html;
+  if(type==="transit"){
+    html=`<div class="wheelbox"><div class="cap">Bi-rueda · natal (interior) + tránsitos (exterior)</div>${buildWheelSVG(data.natal,"dark",data.transit.planets)}</div>`;
+  }else if(type==="solar_return"||type==="progressed"){
+    const der=(type==="solar_return")?data.solar_return:data.progressed;
+    const cap=(type==="solar_return")?"Retorno solar":"Progresada";
+    html=`<div class="wheelrow">
+      <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,"dark")}</div>
+      <div class="wheelbox"><div class="cap">${cap}</div>${buildWheelSVG(der,"dark")}</div></div>`;
+  }else{
+    html=`<div class="wheelbox">${buildWheelSVG(primaryChart(type,data),"dark")}</div>`;
+  }
+  $("wheelWrap").innerHTML=html;
 }
 function lonSignIdx(lon){ return Math.floor((((lon%360)+360)%360)/30); }
 
 // ── Rueda estilo clásico con los íconos propios ─────────────────────────
 // theme "dark": pantalla (fondo azul noche, chips claros bajo los íconos)
 // theme "light": para el reporte (fondo blanco, trazos oscuros)
-function buildWheelSVG(data, theme){
+function buildWheelSVG(data, theme, outer){
   const dark = theme==="dark";
   const LINE = dark ? "#6E78A8" : "#1A1A29";
   const LINE2= dark ? "#4A5590" : "#1A1A29";
@@ -264,7 +411,7 @@ function buildWheelSVG(data, theme){
   const ASP  = dark
     ? {Opposition:"#E06060",Trine:"#6FA0FF",Square:"#D8DCEF",Sextile:"#58C98A"}
     : {Opposition:"#CC0000",Trine:"#0000CC",Square:"#000000",Sextile:"#00990A"};
-  const S=500, C=250, asc=data.angles.asc.lon;
+  const S=outer?560:500, C=S/2, asc=data.angles.asc.lon;
   const ang = lon => (180 + asc - lon) * Math.PI/180;
   const pt = (lon,r) => [C + r*Math.cos(ang(lon)), C + r*Math.sin(ang(lon))];
   const img = (key,lon,r,size,thin)=>{
@@ -322,6 +469,18 @@ function buildWheelSVG(data, theme){
   const putLbl=(t,l)=>{const [x,y]=pt(l,207);
     s+=`<text x="${x}" y="${y}" font-size="11" font-weight="bold" fill="${dark?'#C9A24B':'#000'}" text-anchor="middle" dominant-baseline="central">${t}</text>`;};
   putLbl("Ac",asc); putLbl("Mc",data.angles.mc.lon);
+  if(outer && outer.length){
+    s+=`<circle cx="${C}" cy="${C}" r="252" fill="none" stroke="${LINE}" stroke-width="1"/>`;
+    const osh=adjustAngles(outer.map(p=>p.lon), 7.5);
+    outer.forEach((p,i)=>{
+      const a=osh[i];
+      const [t1,t2]=pt(a,201),[t3,t4]=pt(a,209);
+      s+=`<line x1="${t1}" y1="${t2}" x2="${t3}" y2="${t4}" stroke="${LINE2}" stroke-width="0.7"/>`;
+      s += img(p.key, a, 229, 18, true);
+      const [dx,dy]=pt(a,214);
+      s+=`<text x="${dx}" y="${dy}" font-size="6.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
+    });
+  }
   s+=`</svg>`;
   return s;
 }
@@ -352,49 +511,63 @@ function drawWheel(data){
   $("wheelWrap").innerHTML = buildWheelSVG(data, "dark");
 }
 
-// La imagen para el reporte se genera SIEMPRE en tema claro (fondo blanco)
-function wheelToPng(size){
-  return new Promise((resolve)=>{
-    if(!lastData){ resolve(null); return; }
-    const xml = buildWheelSVG(lastData, "light");
-    const src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
-    const img = new Image();
-    img.onload = ()=>{
-      const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
-      const ctx=cv.getContext("2d");
-      ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size,size);
-      ctx.drawImage(img,0,0,size,size);
-      resolve(cv.toDataURL("image/png"));
-    };
-    img.onerror = ()=>resolve(null);
-    img.src = src;
+// Imagen(es) para el reporte, SIEMPRE en tema claro (fondo blanco).
+function svgToImg(xml){
+  return new Promise(res=>{
+    const src="data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(xml)));
+    const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src;
   });
+}
+async function wheelToPng(size){
+  const type=lastType, data=lastResult;
+  if(!data) return null;
+  if(type==="solar_return"||type==="progressed"){
+    const der=(type==="solar_return")?data.solar_return:data.progressed;
+    const [i1,i2]=await Promise.all([
+      svgToImg(buildWheelSVG(data.natal,"light")),
+      svgToImg(buildWheelSVG(der,"light"))]);
+    const cv=document.createElement("canvas"); cv.width=size*2; cv.height=size;
+    const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size*2,size);
+    if(i1) ctx.drawImage(i1,0,0,size,size);
+    if(i2) ctx.drawImage(i2,size,0,size,size);
+    return cv.toDataURL("image/png");
+  }
+  let xml;
+  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets);
+  else if(type==="combined") xml=buildWheelSVG(data.combined,"light");
+  else xml=buildWheelSVG(data,"light");
+  const im=await svgToImg(xml);
+  const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
+  const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size,size);
+  if(im) ctx.drawImage(im,0,0,size,size);
+  return cv.toDataURL("image/png");
 }
 
 async function descargar(fmt){
-  if(!lastInput){ return; }
+  if(!lastResult||!lastPayload){ setStatus("Primero calcula una carta.",true); return; }
   const dl=$("dlStatus");
   $("btnPdf").disabled=true; $("btnDocx").disabled=true;
   dl.textContent="Generando… (puede tardar unos segundos)";
   try{
-    const png = await wheelToPng(900);
-    const body = Object.assign({}, lastInput, {format:fmt, chart_png:png,
-      city: $("city").value.trim(),
-      astrologer: $("astrologer").value.trim()});
+    const png = await wheelToPng(type_is_dual()?760:900);
+    const body = Object.assign({chart_type:lastType, format:fmt, chart_png:png,
+      name:(lastBase.name||""), city:$("city").value.trim(),
+      astrologer:$("astrologer").value.trim()}, lastPayload);
     const r = await fetch(API_URL+"/api/report",{method:"POST",
       headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     if(!r.ok){ dl.textContent="Error: "+(await r.text()); return; }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
-    const nm = (lastInput.name||"Reporte_Astral").replace(/\s+/g,"_");
+    const nm = (lastBase.name||"Reporte_Astral").replace(/\s+/g,"_");
     const a = document.createElement("a");
-    a.href=url; a.download = nm + (fmt==="docx"?".docx":".pdf");
+    a.href=url; a.download = nm + "_" + lastType + (fmt==="docx"?".docx":".pdf");
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     dl.textContent="Descargado ✓";
   }catch(e){ dl.textContent="No se pudo generar: "+e.message; }
   finally{ $("btnPdf").disabled=false; $("btnDocx").disabled=false; }
 }
+function type_is_dual(){ return lastType==="solar_return"||lastType==="progressed"; }
 
 // ── Leyenda de símbolos ─────────────────────────────────────────────────
 const LEGEND_PLANETS=[["aSol","Sol"],["aLuna","Luna"],["aMercurio","Mercurio"],
@@ -457,13 +630,21 @@ function refreshSavedSel(){
   });
   if(keys.includes(prev)) sel.value=prev;
 }
-function refreshSaved(){ refreshFolderControls(); refreshSavedSel(); }
+const TYPE_ES={natal:"Natal",transit:"Tránsito",solar_return:"Retorno",progressed:"Progresada",combined:"Combinada"};
+function populateBaseSelectors(){
+  const saved=loadSaved(); const keys=Object.keys(saved).sort();
+  const opts='<option value="">— usar carta guardada —</option>'
+    + keys.map(k=>`<option value="${k}">${(saved[k].folder?"📁 "+saved[k].folder+" · ":"")+k}</option>`).join("");
+  $("baseSel").innerHTML=opts; $("bSel").innerHTML=opts;
+}
+function refreshSaved(){ refreshFolderControls(); refreshSavedSel(); populateBaseSelectors(); }
 
 function guardarCarta(){
-  const inp=getInput();
+  const inp=getBase();
   if(!inp.date||isNaN(inp.lat)){ setStatus("Completa los datos antes de guardar.", true); return; }
   inp.folder=$("folder").value.trim();
-  const nombre = inp.name || ("Carta "+inp.date);
+  const etiqueta = inp.name || inp.date;
+  const nombre = TYPE_ES[currentType] + " - " + etiqueta;
   const saved=loadSaved(); saved[nombre]=inp; saveAll(saved);
   refreshSaved(); $("savedSel").value=nombre;
   setStatus(`Carta «${nombre}» guardada${inp.folder?(" en 📁 "+inp.folder):""}.`);
@@ -474,7 +655,13 @@ function cargarCarta(nombre){
   $("lat").value=c.lat; $("lon").value=c.lon; $("tz").value=c.tz||"";
   $("folder").value=c.folder||"";
   if(c.city!==undefined) $("city").value=c.city||"";
-  setStatus(`Carta «${nombre}» cargada. Presiona «Calcular carta».`);
+  setStatus(`Carta «${nombre}» cargada como base. Completa el resto y calcula.`);
+}
+function loadPersonB(nombre){
+  const c=loadSaved()[nombre]; if(!c) return;
+  $("b_name").value=c.name||""; $("b_date").value=c.date||""; $("b_time").value=c.time||"12:00";
+  $("b_lat").value=c.lat; $("b_lon").value=c.lon; $("b_tz").value=c.tz||""; $("b_city").value=c.city||"";
+  setStatus(`Persona 2: «${nombre}» cargada.`);
 }
 function eliminarCarta(){
   const sel=$("savedSel"); if(!sel.value) return;
@@ -485,7 +672,7 @@ function eliminarCarta(){
 function actualizarCarta(){
   const sel=$("savedSel");
   if(!sel.value){ setStatus("Selecciona primero una carta guardada para actualizarla.", true); return; }
-  const inp=getInput();
+  const inp=getBase();
   if(!inp.date||isNaN(inp.lat)){ setStatus("Completa los datos antes de actualizar.", true); return; }
   inp.folder=$("folder").value.trim();
   const saved=loadSaved();
@@ -510,18 +697,47 @@ function cartaDeHoy(){
   }
 }
 
-$("btnCity").addEventListener("click",buscarCiudad);
 $("btnCalc").addEventListener("click",calcular);
 $("btnPdf").addEventListener("click",()=>descargar("pdf"));
 $("btnDocx").addEventListener("click",()=>descargar("docx"));
-$("btnHoy").addEventListener("click",cartaDeHoy);
 $("btnSave").addEventListener("click",guardarCarta);
 $("btnEdit").addEventListener("click",actualizarCarta);
 $("btnDel").addEventListener("click",eliminarCarta);
 $("savedSel").addEventListener("change",e=>{ if(e.target.value) cargarCarta(e.target.value); });
 $("searchBox").addEventListener("input",refreshSavedSel);
 $("folderFilter").addEventListener("change",refreshSavedSel);
-$("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad();}});
+
+// Selector de tipo de carta
+document.querySelectorAll(".tbtn").forEach(b=>b.addEventListener("click",()=>setType(b.dataset.type)));
+
+// Búsqueda de ciudad (Enter) en cada bloque
+$("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("");}});
+if($("t_city")) $("t_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("t_");}});
+if($("r_city")) $("r_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("r_");}});
+if($("b_city")) $("b_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("b_");}});
+
+// Relocalización: mostrar/ocultar bloque de lugar
+if($("t_reloc")) $("t_reloc").addEventListener("change",e=>$("t_locblk").classList.toggle("hidden",!e.target.checked));
+if($("r_reloc")) $("r_reloc").addEventListener("change",e=>$("r_locblk").classList.toggle("hidden",!e.target.checked));
+
+// Tránsito de hoy
+if($("btnTHoy")) $("btnTHoy").addEventListener("click",()=>{
+  const n=new Date(), p=x=>String(x).padStart(2,"0");
+  $("t_date").value = n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate());
+  $("t_time").value = p(n.getHours())+":"+p(n.getMinutes());
+  try{ $("t_tz").value = Intl.DateTimeFormat().resolvedOptions().timeZone||""; }catch(err){}
+  setStatus("Tránsito de hoy listo. Presiona «Calcular».");
+});
+// Progresión a hoy
+if($("btnPHoy")) $("btnPHoy").addEventListener("click",()=>{
+  const n=new Date(), p=x=>String(x).padStart(2,"0");
+  $("p_date").value = n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate());
+  setStatus("Fecha de hoy lista. Presiona «Calcular».");
+});
+
+// Cartas guardadas como base / persona 2
+if($("baseSel")) $("baseSel").addEventListener("change",e=>{ if(e.target.value) cargarCarta(e.target.value); });
+if($("bSel")) $("bSel").addEventListener("change",e=>{ if(e.target.value) loadPersonB(e.target.value); });
 </script>
 </body>
 </html>
