@@ -62,13 +62,19 @@
   .subblk{border-top:1px dashed var(--border);margin-top:14px;padding-top:12px}
   .subblk h2{color:var(--silver)}
   .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin:0}
-  .wheelrow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
-  .wheelbox{flex:1;min-width:250px;text-align:center}
-  .wheelbox .cap{font-size:12px;color:var(--gold);margin-bottom:4px}
+  .wheelrow{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .wheelbox{flex:1 1 380px;min-width:320px;max-width:520px;text-align:center}
+  .wheelbox .cap{font-size:13px;color:var(--gold);margin-bottom:6px;font-weight:600}
+  .wheelbox svg{width:100%;height:auto}
+  #loadbar{position:fixed;top:0;left:0;height:3px;width:0;z-index:9999;opacity:0;
+    background:linear-gradient(90deg,#C9A24B,#E7C877);
+    box-shadow:0 0 10px rgba(201,162,75,.65);
+    transition:width .2s ease, opacity .35s ease}
   @media(max-width:760px){.two{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<div id="loadbar"></div>
 <header>
   <h1>✦ REPORTE ASTRAL</h1>
   <p>Carta natal · cálculo con Swiss Ephemeris</p>
@@ -147,6 +153,7 @@
         <div class="grid" style="margin-top:8px">
           <div><label>Latitud</label><input id="r_lat"></div>
           <div><label>Longitud</label><input id="r_lon"></div>
+          <div><label>Zona horaria</label><input id="r_tz" placeholder="America/Bogota"></div>
         </div>
       </div>
     </div>
@@ -325,7 +332,11 @@ async function calcular(){
     if(!yr){ setStatus("Escribe el año del retorno.",true); return; }
     endpoint="/api/solar_return";
     body={natal:bd(base), year:yr,
-      reloc: ($("r_reloc").checked && !isNaN(numv("r_lat")))?{lat:numv("r_lat"),lon:numv("r_lon"),tz:""}:null};
+      reloc: ($("r_reloc").checked && !isNaN(numv("r_lat")))
+        ? {lat:numv("r_lat"), lon:numv("r_lon"),
+           tz:($("r_tz")?$("r_tz").value.trim():"")||base.tz,
+           city:($("r_city")?$("r_city").value.trim():"")}
+        : null};
   }
   else if(currentType==="progressed"){
     if(!$("p_date").value){ setStatus("Completa la fecha objetivo.",true); return; }
@@ -338,15 +349,36 @@ async function calcular(){
     body={person_a:bd(base), person_b:{date:$("b_date").value,time:$("b_time").value||"12:00",lat:numv("b_lat"),lon:numv("b_lon"),tz:$("b_tz").value.trim()}};
   }
   setStatus("Calculando… (la primera vez puede tardar ~50 s si el servidor estaba en reposo)");
+  startBar();
   try{
     const r=await fetch(API_URL+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!r.ok){ setStatus("Error del servidor: "+(await r.text()),true); return; }
+    if(!r.ok){ setStatus("Error del servidor: "+(await r.text()),true); stopBar(false); return; }
     const data=await r.json();
     lastType=currentType; lastResult=data; lastBase=base;
     lastPayload = (currentType==="natal") ? {natal:body} : body;
     renderResult(currentType,data);
     setStatus("Carta calculada.");
-  }catch(e){ setStatus("No se pudo conectar con la API: "+e.message,true); }
+    stopBar(true);
+  }catch(e){ setStatus("No se pudo conectar con la API: "+e.message,true); stopBar(false); }
+}
+
+// ── Barra de carga sutil (dorada) ───────────────────────────────────────
+let _barTimer=null, _barVal=0;
+function startBar(){
+  const b=$("loadbar"); if(!b) return;
+  clearInterval(_barTimer); _barVal=8;
+  b.style.opacity="1"; b.style.width="8%";
+  _barTimer=setInterval(()=>{
+    const step = _barVal<55?1.6 : _barVal<85?0.45 : 0.12;
+    _barVal=Math.min(_barVal+step, 95);
+    b.style.width=_barVal+"%";
+  }, 200);
+}
+function stopBar(ok){
+  const b=$("loadbar"); if(!b) return;
+  clearInterval(_barTimer);
+  b.style.width="100%";
+  setTimeout(()=>{ b.style.opacity="0"; setTimeout(()=>{ b.style.width="0"; },350); }, 250);
 }
 
 function primaryChart(type,data){
@@ -380,7 +412,14 @@ function renderResult(type,data){
   $("result").classList.remove("hidden");
   const nm=$("name").value.trim();
   const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada"};
-  $("wheelTitle").textContent=titles[type]+(nm?(" · "+nm):"");
+  let titulo = titles[type];
+  if(type==="combined"){
+    const nb=$("b_name").value.trim();
+    titulo += (nm||nb) ? (" · " + (nm||"Persona 1") + " + " + (nb||"Persona 2")) : "";
+  } else {
+    titulo += nm ? (" · "+nm) : "";
+  }
+  $("wheelTitle").textContent=titulo;
   fillTable(primaryChart(type,data));
   let html;
   if(type==="transit"){
@@ -391,8 +430,16 @@ function renderResult(type,data){
     html=`<div class="wheelrow">
       <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,"dark")}</div>
       <div class="wheelbox"><div class="cap">${cap}</div>${buildWheelSVG(der,"dark")}</div></div>`;
+  }else if(type==="combined"){
+    const fmtP=(o,def)=>{ const d=(o.date||""); const t=(o.time||""); const c=(o.city||"");
+      return [def, [t,d].filter(Boolean).join(" · "), c].filter(Boolean).join(" — "); };
+    const p1=fmtP({date:$("date").value,time:$("time").value,city:$("city").value}, nm||"Persona 1");
+    const p2=fmtP({date:$("b_date").value,time:$("b_time").value,city:$("b_city").value}, $("b_name").value.trim()||"Persona 2");
+    html=`<div class="cap" style="color:var(--muted);font-size:12.5px;margin-bottom:8px;line-height:1.7">
+        <b style="color:var(--gold)">${p1}</b><br><span style="color:var(--gold)">+</span> ${p2}</div>
+      <div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(data.combined,"dark")}</div>`;
   }else{
-    html=`<div class="wheelbox">${buildWheelSVG(primaryChart(type,data),"dark")}</div>`;
+    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(primaryChart(type,data),"dark")}</div>`;
   }
   $("wheelWrap").innerHTML=html;
 }
@@ -470,15 +517,13 @@ function buildWheelSVG(data, theme, outer){
     s+=`<text x="${x}" y="${y}" font-size="11" font-weight="bold" fill="${dark?'#C9A24B':'#000'}" text-anchor="middle" dominant-baseline="central">${t}</text>`;};
   putLbl("Ac",asc); putLbl("Mc",data.angles.mc.lon);
   if(outer && outer.length){
-    s+=`<circle cx="${C}" cy="${C}" r="252" fill="none" stroke="${LINE}" stroke-width="1"/>`;
+    // Planetas en tránsito alrededor de la carta natal (sin aro decorativo)
     const osh=adjustAngles(outer.map(p=>p.lon), 7.5);
     outer.forEach((p,i)=>{
       const a=osh[i];
-      const [t1,t2]=pt(a,201),[t3,t4]=pt(a,209);
-      s+=`<line x1="${t1}" y1="${t2}" x2="${t3}" y2="${t4}" stroke="${LINE2}" stroke-width="0.7"/>`;
-      s += img(p.key, a, 229, 18, true);
-      const [dx,dy]=pt(a,214);
-      s+=`<text x="${dx}" y="${dy}" font-size="6.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
+      s += img(p.key, a, 228, 20, true);
+      const [dx,dy]=pt(a,211);
+      s+=`<text x="${dx}" y="${dy}" font-size="7" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
     });
   }
   s+=`</svg>`;
@@ -518,29 +563,30 @@ function svgToImg(xml){
     const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src;
   });
 }
-async function wheelToPng(size){
-  const type=lastType, data=lastResult;
-  if(!data) return null;
-  if(type==="solar_return"||type==="progressed"){
-    const der=(type==="solar_return")?data.solar_return:data.progressed;
-    const [i1,i2]=await Promise.all([
-      svgToImg(buildWheelSVG(data.natal,"light")),
-      svgToImg(buildWheelSVG(der,"light"))]);
-    const cv=document.createElement("canvas"); cv.width=size*2; cv.height=size;
-    const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size*2,size);
-    if(i1) ctx.drawImage(i1,0,0,size,size);
-    if(i2) ctx.drawImage(i2,size,0,size,size);
-    return cv.toDataURL("image/png");
-  }
-  let xml;
-  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets);
-  else if(type==="combined") xml=buildWheelSVG(data.combined,"light");
-  else xml=buildWheelSVG(data,"light");
+async function renderOneWheel(xml, size){
   const im=await svgToImg(xml);
   const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
   const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size,size);
   if(im) ctx.drawImage(im,0,0,size,size);
   return cv.toDataURL("image/png");
+}
+// Devuelve {main, second}. En retorno/progresada son dos ruedas independientes
+// (grandes); en el resto, second queda null.
+async function wheelToPng(size){
+  const type=lastType, data=lastResult;
+  if(!data) return {main:null, second:null};
+  if(type==="solar_return"||type==="progressed"){
+    const der=(type==="solar_return")?data.solar_return:data.progressed;
+    const main   = await renderOneWheel(buildWheelSVG(data.natal,"light"), size);
+    const second = await renderOneWheel(buildWheelSVG(der,"light"), size);
+    return {main, second};
+  }
+  let xml;
+  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets);
+  else if(type==="combined") xml=buildWheelSVG(data.combined,"light");
+  else xml=buildWheelSVG(data,"light");
+  const main=await renderOneWheel(xml, size);
+  return {main, second:null};
 }
 
 async function descargar(fmt){
@@ -549,13 +595,18 @@ async function descargar(fmt){
   $("btnPdf").disabled=true; $("btnDocx").disabled=true;
   dl.textContent="Generando… (puede tardar unos segundos)";
   try{
-    const png = await wheelToPng(type_is_dual()?760:900);
-    const body = Object.assign({chart_type:lastType, format:fmt, chart_png:png,
+    startBar();
+    const imgs = await wheelToPng(900);
+    const body = Object.assign({chart_type:lastType, format:fmt,
+      chart_png:imgs.main, chart_png2:imgs.second,
       name:(lastBase.name||""), city:$("city").value.trim(),
-      astrologer:$("astrologer").value.trim()}, lastPayload);
+      astrologer:$("astrologer").value.trim(),
+      name_b: (lastType==="combined") ? $("b_name").value.trim() : "",
+      city_b: (lastType==="combined") ? $("b_city").value.trim() : ""
+    }, lastPayload);
     const r = await fetch(API_URL+"/api/report",{method:"POST",
       headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-    if(!r.ok){ dl.textContent="Error: "+(await r.text()); return; }
+    if(!r.ok){ dl.textContent="Error: "+(await r.text()); stopBar(false); return; }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const nm = (lastBase.name||"Reporte_Astral").replace(/\s+/g,"_");
@@ -564,7 +615,8 @@ async function descargar(fmt){
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     dl.textContent="Descargado ✓";
-  }catch(e){ dl.textContent="No se pudo generar: "+e.message; }
+    stopBar(true);
+  }catch(e){ dl.textContent="No se pudo generar: "+e.message; stopBar(false); }
   finally{ $("btnPdf").disabled=false; $("btnDocx").disabled=false; }
 }
 function type_is_dual(){ return lastType==="solar_return"||lastType==="progressed"; }
