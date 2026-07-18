@@ -191,12 +191,17 @@ async function buscarCiudad(){
   if(!q){ setStatus("Escribe una ciudad."); return; }
   setStatus("Buscando ciudad…");
   try{
-    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(q),
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q="+encodeURIComponent(q),
       {headers:{"Accept":"application/json"}});
     const arr = await r.json();
     if(!arr.length){ setStatus("No se encontró la ciudad. Puedes escribir la latitud y longitud a mano.", true); return; }
     $("lat").value = parseFloat(arr[0].lat).toFixed(4);
     $("lon").value = parseFloat(arr[0].lon).toFixed(4);
+    // Componer "Ciudad, País" para la portada del reporte
+    const ad = arr[0].address || {};
+    const loc = ad.city||ad.town||ad.village||ad.municipality||ad.county||ad.state||"";
+    const pais = ad.country||"";
+    $("city").value = [loc, pais].filter(Boolean).join(", ") || q;
     setStatus("Ubicación: "+arr[0].display_name);
   }catch(e){ setStatus("No se pudo buscar la ciudad. Escribe la latitud y longitud a mano.", true); }
 }
