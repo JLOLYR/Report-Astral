@@ -589,6 +589,35 @@ async function wheelToPng(size){
   return {main, second:null};
 }
 
+// Envía el reporte con reintento: el servidor gratuito a veces se duerme o
+// corta la conexión en la primera petición pesada.
+async function postReport(body, dl){
+  const intentos = 3;
+  for(let i=1;i<=intentos;i++){
+    const ctrl = new AbortController();
+    const to = setTimeout(()=>ctrl.abort(), 180000);   // 3 min
+    try{
+      const r = await fetch(API_URL+"/api/report",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(body), signal:ctrl.signal});
+      clearTimeout(to);
+      return r;
+    }catch(e){
+      clearTimeout(to);
+      if(i < intentos){
+        dl.textContent = "El servidor no respondió; reintentando ("+i+"/"+(intentos-1)+")…";
+        await new Promise(res=>setTimeout(res, 4000*i));
+      }else{
+        dl.textContent = "No se pudo conectar con el servidor para generar el reporte. "
+          + "Suele pasar cuando estaba dormido o se quedó sin memoria: espera unos "
+          + "segundos y vuelve a intentar.";
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 async function descargar(fmt){
   if(!lastResult||!lastPayload){ setStatus("Primero calcula una carta.",true); return; }
   const dl=$("dlStatus");
@@ -596,7 +625,9 @@ async function descargar(fmt){
   dl.textContent="Generando… (puede tardar unos segundos)";
   try{
     startBar();
-    const imgs = await wheelToPng(900);
+    // 700 px es suficiente para imprimir con nitidez y mantiene liviana la
+    // petición (el plan gratuito tiene poca memoria).
+    const imgs = await wheelToPng(700);
     const body = Object.assign({chart_type:lastType, format:fmt,
       chart_png:imgs.main, chart_png2:imgs.second,
       name:(lastBase.name||""), city:$("city").value.trim(),
@@ -604,9 +635,9 @@ async function descargar(fmt){
       name_b: (lastType==="combined") ? $("b_name").value.trim() : "",
       city_b: (lastType==="combined") ? $("b_city").value.trim() : ""
     }, lastPayload);
-    const r = await fetch(API_URL+"/api/report",{method:"POST",
-      headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-    if(!r.ok){ dl.textContent="Error: "+(await r.text()); stopBar(false); return; }
+    const r = await postReport(body, dl);
+    if(!r){ stopBar(false); return; }
+    if(!r.ok){ dl.textContent="Error del servidor ("+r.status+"): "+(await r.text()).slice(0,300); stopBar(false); return; }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const nm = (lastBase.name||"Reporte_Astral").replace(/\s+/g,"_");
