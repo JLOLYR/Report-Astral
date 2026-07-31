@@ -577,15 +577,15 @@ function buildWheelSVG(data, theme, outer, info){
       const [a1,b1]=pt(l+d,180),[a2,b2]=pt(l+d,200);
       s+=`<line x1="${a1}" y1="${b1}" x2="${a2}" y2="${b2}" stroke="${LINE}" stroke-width="0.6"/>`;
     }
-    s += img(SIGN_KEYS[i], l+15, 170, 23, false);
-    DECAN_RULERS[i].forEach((rk,d)=>{ s += img(rk, l+5+d*10, 190, 14, false); });
+    s += img(SIGN_KEYS[i], l+15, 170, 18, false);
+    DECAN_RULERS[i].forEach((rk,d)=>{ s += img(rk, l+5+d*10, 190, 11, false); });
   }
   data.houses.forEach(h=>{
     const [x1,y1]=pt(h.lon,80),[x2,y2]=pt(h.lon,160);
     const axis=(h.num===1||h.num===10||h.num===4||h.num===7);
     s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${axis?LINE:LINE2}" stroke-width="${axis?1.5:0.8}"/>`;
     const [nx,ny]=pt(h.lon+5,75);
-    s+=`<text x="${nx}" y="${ny}" font-size="9.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
+    s+=`<text x="${nx}" y="${ny}" font-size="8" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
   });
   const pos={}; data.planets.forEach(p=>pos[p.key]=p.lon);
   data.aspects.forEach(a=>{
@@ -597,15 +597,15 @@ function buildWheelSVG(data, theme, outer, info){
   const shown = adjustAngles(lons, 7.5);
   data.planets.forEach((p,i)=>{
     const a = shown[i];
-    s += img(p.key, a, 140, 27, true);
-    const [dx,dy]=pt(a,120);
-    s+=`<text x="${dx}" y="${dy}" font-size="9" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
-    s += img(SIGN_KEYS[p.sign_index-1], a, 106, 15, false);
-    const [mx,my]=pt(a,95);
-    s+=`<text x="${mx}" y="${my}" font-size="8.5" fill="${TXT2}" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
+    s += img(p.key, a, 141, 22, true);
+    const [dx,dy]=pt(a,122);
+    s+=`<text x="${dx}" y="${dy}" font-size="7.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
+    s += img(SIGN_KEYS[p.sign_index-1], a, 109, 12, false);
+    const [mx,my]=pt(a,98);
+    s+=`<text x="${mx}" y="${my}" font-size="7" fill="${TXT2}" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
     if(p.retrograde){
-      const [rx,ry]=pt(a,85);
-      s+=`<text x="${rx}" y="${ry}" font-size="8.5" fill="${RCOL}" text-anchor="middle" dominant-baseline="central">R</text>`;
+      const [rx,ry]=pt(a,87);
+      s+=`<text x="${rx}" y="${ry}" font-size="7" fill="${RCOL}" text-anchor="middle" dominant-baseline="central">R</text>`;
     }
   });
   const putLbl=(t,l)=>{const [x,y]=pt(l,207);
@@ -616,9 +616,9 @@ function buildWheelSVG(data, theme, outer, info){
     const osh=adjustAngles(outer.map(p=>p.lon), 7.5);
     outer.forEach((p,i)=>{
       const a=osh[i];
-      s += img(p.key, a, 228, 25, true);
-      const [dx,dy]=pt(a,210);
-      s+=`<text x="${dx}" y="${dy}" font-size="8.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
+      s += img(p.key, a, 228, 20, true);
+      const [dx,dy]=pt(a,211);
+      s+=`<text x="${dx}" y="${dy}" font-size="7" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
     });
   }
   s+=`</g></svg>`;
