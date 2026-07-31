@@ -75,6 +75,27 @@
     box-shadow:0 0 10px rgba(201,162,75,.65);
     transition:width .2s ease, opacity .35s ease}
   @media(max-width:760px){.two{grid-template-columns:1fr}}
+  /* ── Móvil ─────────────────────────────────────────────────────────── */
+  @media(max-width:640px){
+    .wrap{padding:10px}
+    .card{padding:13px}
+    .grid,.grid3{grid-template-columns:1fr}
+    .row{flex-wrap:wrap}
+    .row>input,.row>select{flex:1 1 100%;min-width:0}
+    .row>button{flex:1 1 auto}
+    .dlbar{gap:8px}
+    .dlbar span{font-size:12px}
+    .dlbar span[style]{margin-left:0 !important}
+    #astrologer{max-width:100% !important}
+    .folder,#folder{max-width:100% !important}
+    #searchBox,#folderFilter,#savedSel{flex:1 1 100% !important;max-width:100% !important}
+    .wheelbox{flex:1 1 100%;min-width:0;max-width:100%}
+    .tbtn{flex:1 1 auto;text-align:center;padding:9px 10px;font-size:12.5px}
+    table{font-size:12px}
+    th,td{padding:5px 5px}
+    h1{font-size:22px}
+    .foot{font-size:10px}
+  }
 </style>
 </head>
 <body>
