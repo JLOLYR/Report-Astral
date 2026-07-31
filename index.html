@@ -112,8 +112,7 @@
     <button type="button" class="tbtn" data-type="solar_return">☀ Retorno solar</button>
     <button type="button" class="tbtn" data-type="progressed">◑ Progresada</button>
     <button type="button" class="tbtn" data-type="combined">⊕ Combinada</button>
-    <button type="button" class="tbtn tbtn-soon" id="btnAkashic" disabled
-            title="Próximamente">📜 Registros Akáshicos <span class="soon">próximamente</span></button>
+    <button type="button" class="tbtn" data-type="akashic">📜 Registros Akáshicos</button>
   </div>
   <div class="card">
     <h2 id="baseTitle">Datos de nacimiento</h2>
@@ -393,9 +392,11 @@ async function buscarCiudad(pfx){
 // ── Tipo de carta ───────────────────────────────────────────────────────
 let currentType="natal", lastType="natal", lastResult=null, lastBase=null, lastPayload=null;
 const TYPE_LABEL={natal:"Datos de nacimiento",transit:"Datos natales (persona base)",
-  solar_return:"Datos natales (persona base)",progressed:"Datos natales (persona base)",combined:"Persona 1"};
+  solar_return:"Datos natales (persona base)",progressed:"Datos natales (persona base)",combined:"Persona 1",
+  akashic:"Datos de nacimiento"};
 const CALC_LABEL={natal:"✦ Calcular carta",transit:"☿ Calcular tránsitos",
-  solar_return:"☀ Calcular retorno solar",progressed:"◑ Calcular progresada",combined:"⊕ Calcular combinada"};
+  solar_return:"☀ Calcular retorno solar",progressed:"◑ Calcular progresada",combined:"⊕ Calcular combinada",
+  akashic:"📜 Calcular Registros Akáshicos"};
 function setType(t){
   currentType=t;
   document.querySelectorAll(".tbtn").forEach(b=>b.classList.toggle("active",b.dataset.type===t));
@@ -413,7 +414,7 @@ async function calcular(){
   if(currentType==="combined") await ensureCity("b_");
   base=getBase();
   let endpoint, body;
-  if(currentType==="natal"){ endpoint="/api/natal"; body=bd(base); }
+  if(currentType==="natal"||currentType==="akashic"){ endpoint="/api/natal"; body=bd(base); }
   else if(currentType==="transit"){
     if(!$("t_date").value){ setStatus("Completa la fecha del tránsito.",true); return; }
     const reloc = $("t_reloc").checked && !isNaN(numv("t_lat"));
@@ -450,7 +451,7 @@ async function calcular(){
     if(!r.ok){ setStatus("Error del servidor: "+(await r.text()),true); stopBar(false); return; }
     const data=await r.json();
     lastType=currentType; lastResult=data; lastBase=base;
-    lastPayload = (currentType==="natal") ? {natal:body} : body;
+    lastPayload = (currentType==="natal"||currentType==="akashic") ? {natal:body} : body;
     renderResult(currentType,data);
     setStatus("Carta calculada.");
     stopBar(true);
@@ -506,7 +507,7 @@ function fillTable(chart){
 function renderResult(type,data){
   $("result").classList.remove("hidden");
   const nm=$("name").value.trim();
-  const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada"};
+  const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada",akashic:"Registros Akáshicos"};
   let titulo = titles[type];
   if(type==="combined"){
     const nb=$("b_name").value.trim();
@@ -524,6 +525,7 @@ const TIPO_CORTO={natal:"Carta Natal",transit:"Tránsitos",solar_return:"Retorno
 function wheelInfos(type, data){
   const nm=$("name").value.trim();
   const persona={name:nm, time:$("time").value, date:$("date").value, city:$("city").value};
+  if(type==="akashic") return {main:infoDe(persona,"Registros Akáshicos")};
   if(type==="transit") return {main:infoDe(persona,"Tránsitos")};
   if(type==="solar_return"||type==="progressed"){
     const natInfo=infoDe(persona,"Carta Natal");
