@@ -114,9 +114,10 @@
     <div style="margin-top:10px">
       <label>Ciudad de nacimiento</label>
       <div class="row">
-        <input id="city" placeholder="Ej: Temuco, Chile">
+        <input id="city" list="citylist" placeholder="Ej: Temuco, Chile">
         <button class="sec" type="button" onclick="buscarCiudad('')">🔍 Buscar</button>
       </div>
+      <datalist id="citylist"></datalist>
     </div>
     <div class="grid3" style="margin-top:10px">
       <div><label>Latitud</label><input id="lat" placeholder="-38.7333"></div>
@@ -136,7 +137,7 @@
         <label class="chk"><input type="checkbox" id="t_reloc"> Relocalizar (calcular en otro lugar)</label>
       </div>
       <div id="t_locblk" class="hidden" style="margin-top:8px">
-        <div class="row"><input id="t_city" placeholder="Ciudad del tránsito">
+        <div class="row"><input id="t_city" list="citylist" placeholder="Ciudad del tránsito">
           <button class="sec" type="button" onclick="buscarCiudad('t_')">🔍</button></div>
         <div class="grid3" style="margin-top:8px">
           <div><label>Latitud</label><input id="t_lat"></div>
@@ -154,7 +155,7 @@
           <label class="chk"><input type="checkbox" id="r_reloc"> Relocalizar (dónde estás ese cumpleaños)</label></div>
       </div>
       <div id="r_locblk" class="hidden" style="margin-top:8px">
-        <div class="row"><input id="r_city" placeholder="Ciudad del retorno">
+        <div class="row"><input id="r_city" list="citylist" placeholder="Ciudad del retorno">
           <button class="sec" type="button" onclick="buscarCiudad('r_')">🔍</button></div>
         <div class="grid" style="margin-top:8px">
           <div><label>Latitud</label><input id="r_lat"></div>
@@ -184,7 +185,7 @@
         <div><label>Hora</label><input id="b_time" type="time" value="12:00"></div>
       </div>
       <div style="margin-top:8px"><label>Ciudad</label>
-        <div class="row"><input id="b_city" placeholder="Ciudad">
+        <div class="row"><input id="b_city" list="citylist" placeholder="Ciudad">
           <button class="sec" type="button" onclick="buscarCiudad('b_')">🔍</button></div></div>
       <div class="grid3" style="margin-top:8px">
         <div><label>Latitud</label><input id="b_lat"></div>
@@ -208,6 +209,11 @@
       <select id="savedSel" style="flex:1.4"><option value="">— cartas guardadas —</option></select>
       <button class="sec" id="btnEdit" type="button" title="Actualizar la carta seleccionada">✏</button>
       <button class="sec" id="btnDel" type="button" title="Eliminar la carta seleccionada">🗑</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="sec" id="btnExport" type="button" title="Descargar todas tus cartas en un archivo .json">⬆ Exportar cartas</button>
+      <button class="sec" id="btnImport" type="button" title="Cargar cartas desde un archivo .json">⬇ Importar cartas</button>
+      <input id="importFile" type="file" accept="application/json,.json" style="display:none">
     </div>
     <div class="status" id="status"></div>
     <div class="apibar">API: <span id="apiUrl"></span></div>
@@ -288,12 +294,44 @@ function bd(o){ return {date:o.date,time:o.time,lat:o.lat,lon:o.lon,tz:o.tz}; }
 
 const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
   "septiembre","octubre","noviembre","diciembre"];
+const MESES_AB=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 function fFecha(iso){ if(!iso) return ""; const p=String(iso).split("-");
   if(p.length<3) return iso; return (+p[2])+" de "+(MESES[(+p[1])-1]||"")+" de "+p[0]; }
+function fFechaAb(iso){ if(!iso) return ""; const p=String(iso).split("-");
+  if(p.length<3) return iso; return (MESES_AB[(+p[1])-1]||"")+" "+(+p[2])+". "+p[0]; }
+// Ciudades frecuentes (útil para desambiguar nombres repetidos entre países)
+const CITIES=["Santiago, Chile","Santiago de Cuba, Cuba","Santiago de Compostela, España",
+ "Santiago, República Dominicana","Santiago del Estero, Argentina",
+ "Buenos Aires, Argentina","Córdoba, Argentina","Córdoba, España","Rosario, Argentina",
+ "Mendoza, Argentina","La Plata, Argentina","Valparaíso, Chile","Viña del Mar, Chile",
+ "Concepción, Chile","Concepción, Paraguay","La Serena, Chile","Temuco, Chile",
+ "Antofagasta, Chile","Lima, Perú","Arequipa, Perú","Cusco, Perú",
+ "Bogotá, Colombia","Medellín, Colombia","Cali, Colombia","Cartagena, Colombia",
+ "Cartagena, España","Barranquilla, Colombia","Quito, Ecuador","Guayaquil, Ecuador",
+ "Caracas, Venezuela","Valencia, Venezuela","Valencia, España","Maracaibo, Venezuela",
+ "Barcelona, Venezuela","Barcelona, España","Mérida, Venezuela","Mérida, México",
+ "Mérida, España","La Paz, Bolivia","La Paz, México","Santa Cruz, Bolivia",
+ "Montevideo, Uruguay","Asunción, Paraguay","Ciudad de México, México","Guadalajara, México",
+ "Guadalajara, España","Monterrey, México","Puebla, México","Tijuana, México",
+ "San José, Costa Rica","Panamá, Panamá","La Habana, Cuba","San Juan, Puerto Rico",
+ "Madrid, España","Barcelona, España","Sevilla, España","Valencia, España",
+ "Bilbao, España","Málaga, España","Zaragoza, España","Miami, Estados Unidos",
+ "Nueva York, Estados Unidos","Los Ángeles, Estados Unidos"];
+function fillCityList(){
+  const dl=$("citylist"); if(!dl) return;
+  dl.innerHTML=CITIES.map(c=>`<option value="${c}">`).join("");
+}
+
 // Cabecera con datos que se dibuja sobre la rueda (sin taparla)
-function infoDe(o){
-  const sub=[o.time, fFecha(o.date), o.city].filter(Boolean).join("  ·  ");
-  return {title:(o.name||"").trim(), sub};
+// Formato del título: "Nombre Apellido, Mmm DD. AAAA — Tipo"
+function infoDe(o, tipo){
+  const nm=(o.name||"").trim();
+  let title = nm;
+  const fecha = fFechaAb(o.date);
+  if(fecha) title += (title?", ":"") + fecha;
+  if(tipo)  title += (title?"  —  ":"") + tipo;
+  const sub=[o.time, o.city].filter(Boolean).join("  ·  ");
+  return {title, sub};
 }
 
 async function buscarCiudad(pfx){
@@ -437,31 +475,50 @@ function renderResult(type,data){
   }
   $("wheelTitle").textContent=titulo;
   fillTable(primaryChart(type,data));
-  const baseInfo = infoDe({name:nm, time:$("time").value, date:$("date").value, city:$("city").value});
-  let html;
-  if(type==="transit"){
-    html=`<div class="wheelbox"><div class="cap">Bi-rueda · natal (interior) + tránsitos (exterior)</div>${buildWheelSVG(data.natal,"dark",data.transit.planets,baseInfo)}</div>`;
-  }else if(type==="solar_return"||type==="progressed"){
-    const der=(type==="solar_return")?data.solar_return:data.progressed;
+  const html = wheelsHTML(type, data, "dark");
+  $("wheelWrap").innerHTML=html;
+}
+const TIPO_CORTO={natal:"Carta Natal",transit:"Tránsitos",solar_return:"Retorno Solar",progressed:"Progresada",combined:"Carta Combinada"};
+// Devuelve la(s) rueda(s) con sus cabeceras. theme "dark" (pantalla) o "light" (reporte).
+function wheelInfos(type, data){
+  const nm=$("name").value.trim();
+  const persona={name:nm, time:$("time").value, date:$("date").value, city:$("city").value};
+  if(type==="transit") return {main:infoDe(persona,"Tránsitos")};
+  if(type==="solar_return"||type==="progressed"){
+    const natInfo=infoDe(persona,"Carta Natal");
     let derInfo;
     if(type==="solar_return"){
       const si=(data.solar_return&&data.solar_return.input)||{};
       const rplace=($("r_reloc").checked?$("r_city").value.trim():"")||$("city").value.trim();
-      derInfo={title:"Retorno solar", sub:[rplace, si.return_local||""].filter(Boolean).join("  ·  ")};
+      const yr=(data.year?(" "+data.year):"");
+      derInfo={title:"Retorno Solar"+yr, sub:[rplace, si.return_local||""].filter(Boolean).join("  ·  ")};
     }else{
       derInfo={title:"Progresada", sub:($("p_date").value?("a "+fFecha($("p_date").value)):"")};
     }
-    html=`<div class="wheelrow">
-      <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,"dark",null,baseInfo)}</div>
-      <div class="wheelbox"><div class="cap">${derInfo.title}</div>${buildWheelSVG(der,"dark",null,derInfo)}</div></div>`;
-  }else if(type==="combined"){
-    const nb=$("b_name").value.trim();
-    const combInfo={title:(nm||"Persona 1")+"   +   "+(nb||"Persona 2"), sub:""};
-    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(data.combined,"dark",null,combInfo)}</div>`;
-  }else{
-    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(primaryChart(type,data),"dark",null,baseInfo)}</div>`;
+    return {natal:natInfo, der:derInfo};
   }
-  $("wheelWrap").innerHTML=html;
+  if(type==="combined"){
+    const nb=$("b_name").value.trim();
+    const t=($("time").value||""), tb=($("b_time").value||"");
+    const title=(nm||"Persona 1")+"  +  "+(nb||"Persona 2")+"  —  Carta Combinada";
+    const sub=[[$("city").value.trim(),fFechaAb($("date").value)].filter(Boolean).join(" "),
+               [$("b_city").value.trim(),fFechaAb($("b_date").value)].filter(Boolean).join(" ")]
+              .filter(Boolean).join("   +   ");
+    return {main:{title, sub}};
+  }
+  return {main:infoDe(persona,"Carta Natal")};
+}
+function wheelsHTML(type, data, theme){
+  const inf=wheelInfos(type,data);
+  if(type==="transit")
+    return `<div class="wheelbox"><div class="cap">Bi-rueda · natal (interior) + tránsitos (exterior)</div>${buildWheelSVG(data.natal,theme,data.transit.planets,inf.main)}</div>`;
+  if(type==="solar_return"||type==="progressed"){
+    const der=(type==="solar_return")?data.solar_return:data.progressed;
+    return `<div class="wheelrow">
+      <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,theme,null,inf.natal)}</div>
+      <div class="wheelbox"><div class="cap">${inf.der.title}</div>${buildWheelSVG(der,theme,null,inf.der)}</div></div>`;
+  }
+  return `<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(primaryChart(type,data),theme,null,inf.main)}</div>`;
 }
 function lonSignIdx(lon){ return Math.floor((((lon%360)+360)%360)/30); }
 
@@ -497,8 +554,16 @@ function buildWheelSVG(data, theme, outer, info){
   s += `<rect width="${S}" height="${H}" fill="${bg}"/>`;
   if(HB){
     const gc = dark?'#C9A24B':'#1E2450', tc = dark?'#DBE1F3':'#26304F';
-    if(info.title) s+=`<text x="${S/2}" y="${(HB*0.44).toFixed(1)}" font-size="${(S*0.044).toFixed(1)}" font-weight="bold" fill="${gc}" text-anchor="middle" dominant-baseline="middle">${escx(info.title)}</text>`;
-    if(info.sub)   s+=`<text x="${S/2}" y="${(HB*0.80).toFixed(1)}" font-size="${(S*0.032).toFixed(1)}" fill="${tc}" text-anchor="middle" dominant-baseline="middle">${escx(info.sub)}</text>`;
+    if(info.title){
+      const tlen=(info.title||"").length;
+      const tf=Math.max(S*0.030, Math.min(S*0.046, S*0.94/(tlen*0.52)));
+      s+=`<text x="${S/2}" y="${(HB*0.42).toFixed(1)}" font-size="${tf.toFixed(1)}" font-weight="bold" fill="${gc}" text-anchor="middle" dominant-baseline="middle">${escx(info.title)}</text>`;
+    }
+    if(info.sub){
+      const slen=(info.sub||"").length;
+      const sf=Math.max(S*0.024, Math.min(S*0.033, S*0.92/(slen*0.5)));
+      s+=`<text x="${S/2}" y="${(HB*0.80).toFixed(1)}" font-size="${sf.toFixed(1)}" fill="${tc}" text-anchor="middle" dominant-baseline="middle">${escx(info.sub)}</text>`;
+    }
   }
   s += `<g transform="translate(0,${HB})">`;
   [200,180,160,80,70].forEach(r=>{
@@ -512,15 +577,15 @@ function buildWheelSVG(data, theme, outer, info){
       const [a1,b1]=pt(l+d,180),[a2,b2]=pt(l+d,200);
       s+=`<line x1="${a1}" y1="${b1}" x2="${a2}" y2="${b2}" stroke="${LINE}" stroke-width="0.6"/>`;
     }
-    s += img(SIGN_KEYS[i], l+15, 170, 18, false);
-    DECAN_RULERS[i].forEach((rk,d)=>{ s += img(rk, l+5+d*10, 190, 11, false); });
+    s += img(SIGN_KEYS[i], l+15, 170, 23, false);
+    DECAN_RULERS[i].forEach((rk,d)=>{ s += img(rk, l+5+d*10, 190, 14, false); });
   }
   data.houses.forEach(h=>{
     const [x1,y1]=pt(h.lon,80),[x2,y2]=pt(h.lon,160);
     const axis=(h.num===1||h.num===10||h.num===4||h.num===7);
     s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${axis?LINE:LINE2}" stroke-width="${axis?1.5:0.8}"/>`;
     const [nx,ny]=pt(h.lon+5,75);
-    s+=`<text x="${nx}" y="${ny}" font-size="8" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
+    s+=`<text x="${nx}" y="${ny}" font-size="9.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${h.num}</text>`;
   });
   const pos={}; data.planets.forEach(p=>pos[p.key]=p.lon);
   data.aspects.forEach(a=>{
@@ -532,15 +597,15 @@ function buildWheelSVG(data, theme, outer, info){
   const shown = adjustAngles(lons, 7.5);
   data.planets.forEach((p,i)=>{
     const a = shown[i];
-    s += img(p.key, a, 141, 22, true);
-    const [dx,dy]=pt(a,122);
-    s+=`<text x="${dx}" y="${dy}" font-size="7.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
-    s += img(SIGN_KEYS[p.sign_index-1], a, 109, 12, false);
-    const [mx,my]=pt(a,98);
-    s+=`<text x="${mx}" y="${my}" font-size="7" fill="${TXT2}" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
+    s += img(p.key, a, 140, 27, true);
+    const [dx,dy]=pt(a,120);
+    s+=`<text x="${dx}" y="${dy}" font-size="9" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°</text>`;
+    s += img(SIGN_KEYS[p.sign_index-1], a, 106, 15, false);
+    const [mx,my]=pt(a,95);
+    s+=`<text x="${mx}" y="${my}" font-size="8.5" fill="${TXT2}" text-anchor="middle" dominant-baseline="central">${String(p.min).padStart(2,"0")}'</text>`;
     if(p.retrograde){
-      const [rx,ry]=pt(a,87);
-      s+=`<text x="${rx}" y="${ry}" font-size="7" fill="${RCOL}" text-anchor="middle" dominant-baseline="central">R</text>`;
+      const [rx,ry]=pt(a,85);
+      s+=`<text x="${rx}" y="${ry}" font-size="8.5" fill="${RCOL}" text-anchor="middle" dominant-baseline="central">R</text>`;
     }
   });
   const putLbl=(t,l)=>{const [x,y]=pt(l,207);
@@ -551,9 +616,9 @@ function buildWheelSVG(data, theme, outer, info){
     const osh=adjustAngles(outer.map(p=>p.lon), 7.5);
     outer.forEach((p,i)=>{
       const a=osh[i];
-      s += img(p.key, a, 228, 20, true);
-      const [dx,dy]=pt(a,211);
-      s+=`<text x="${dx}" y="${dy}" font-size="7" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
+      s += img(p.key, a, 228, 25, true);
+      const [dx,dy]=pt(a,210);
+      s+=`<text x="${dx}" y="${dy}" font-size="8.5" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
     });
   }
   s+=`</g></svg>`;
@@ -607,31 +672,19 @@ async function renderOneWheel(xml, size){
 // Devuelve {main, second}. En retorno/progresada son dos ruedas independientes
 // (grandes); en el resto, second queda null.
 async function wheelToPng(size){
-  const type=lastType, data=lastResult, base=lastBase||{};
+  const type=lastType, data=lastResult;
   if(!data) return {main:null, second:null};
-  const baseInfo = infoDe({name:base.name, time:base.time, date:base.date, city:base.city});
+  const inf=wheelInfos(type,data);
   if(type==="solar_return"||type==="progressed"){
     const der=(type==="solar_return")?data.solar_return:data.progressed;
-    let derInfo;
-    if(type==="solar_return"){
-      const si=(data.solar_return&&data.solar_return.input)||{};
-      const rplace=($("r_reloc").checked?$("r_city").value.trim():"")||(base.city||"");
-      derInfo={title:"Retorno solar", sub:[rplace, si.return_local||""].filter(Boolean).join("  ·  ")};
-    }else{
-      derInfo={title:"Progresada", sub:($("p_date").value?("a "+fFecha($("p_date").value)):"")};
-    }
-    const main   = await renderOneWheel(buildWheelSVG(data.natal,"light",null,baseInfo), size);
-    const second = await renderOneWheel(buildWheelSVG(der,"light",null,derInfo), size);
+    const main   = await renderOneWheel(buildWheelSVG(data.natal,"light",null,inf.natal), size);
+    const second = await renderOneWheel(buildWheelSVG(der,"light",null,inf.der), size);
     return {main, second};
   }
   let xml;
-  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets,baseInfo);
-  else if(type==="combined"){
-    const nb=$("b_name").value.trim();
-    const combInfo={title:(base.name||"Persona 1")+"   +   "+(nb||"Persona 2"), sub:""};
-    xml=buildWheelSVG(data.combined,"light",null,combInfo);
-  }
-  else xml=buildWheelSVG(data,"light",null,baseInfo);
+  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets,inf.main);
+  else if(type==="combined") xml=buildWheelSVG(data.combined,"light",null,inf.main);
+  else xml=buildWheelSVG(primaryChart(type,data),"light",null,inf.main);
   const main=await renderOneWheel(xml, size);
   return {main, second:null};
 }
@@ -812,6 +865,45 @@ function actualizarCarta(){
   refreshSaved(); $("savedSel").value=nuevoNombre;
   setStatus(`Carta «${nuevoNombre}» actualizada.`);
 }
+
+// ── Exportar / importar cartas guardadas (.json) ────────────────────────
+function exportarCartas(){
+  const saved=loadSaved();
+  const n=Object.keys(saved).length;
+  if(!n){ setStatus("No hay cartas guardadas para exportar.", true); return; }
+  const payload={app:"Reporte Astral", tipo:"cartas", version:1,
+    exportado:new Date().toISOString(), cartas:saved};
+  const blob=new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="cartas_reporte_astral.json";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  setStatus(`Exportadas ${n} carta(s) a «cartas_reporte_astral.json».`);
+}
+function importarCartas(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const nuevas = data.cartas || data;   // acepta {cartas:{}} o {} directo
+      if(typeof nuevas!=="object"||Array.isArray(nuevas)) throw new Error("formato");
+      const saved=loadSaved();
+      let add=0, upd=0;
+      for(const k in nuevas){
+        if(!nuevas[k] || typeof nuevas[k]!=="object") continue;
+        if(k in saved) upd++; else add++;
+        saved[k]=nuevas[k];
+      }
+      saveAll(saved); refreshSaved();
+      setStatus(`Importación lista: ${add} nueva(s), ${upd} actualizada(s).`);
+    }catch(err){
+      setStatus("No se pudo leer el archivo. Debe ser un .json exportado desde aquí.", true);
+    }
+  };
+  reader.readAsText(file);
+}
+
+fillCityList();
 refreshSaved();
 
 // ── Carta de este momento ───────────────────────────────────────────────
@@ -836,9 +928,12 @@ $("btnDel").addEventListener("click",eliminarCarta);
 $("savedSel").addEventListener("change",e=>{ if(e.target.value) cargarCarta(e.target.value); });
 $("searchBox").addEventListener("input",refreshSavedSel);
 $("folderFilter").addEventListener("change",refreshSavedSel);
+if($("btnExport")) $("btnExport").addEventListener("click",exportarCartas);
+if($("btnImport")) $("btnImport").addEventListener("click",()=>$("importFile").click());
+if($("importFile")) $("importFile").addEventListener("change",e=>{ if(e.target.files[0]){ importarCartas(e.target.files[0]); e.target.value=""; } });
 
-// Selector de tipo de carta
-document.querySelectorAll(".tbtn").forEach(b=>b.addEventListener("click",()=>setType(b.dataset.type)));
+// Selector de tipo de carta (el botón deshabilitado de Akáshicos no dispara)
+document.querySelectorAll(".tbtn").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.type) setType(b.dataset.type); }));
 
 // Búsqueda de ciudad (Enter) en cada bloque
 $("city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("");}});
