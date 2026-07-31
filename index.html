@@ -342,6 +342,22 @@ function fillCityList(){
   const dl=$("citylist"); if(!dl) return;
   dl.innerHTML=CITIES.map(c=>`<option value="${c}">`).join("");
 }
+// Geocodificación inversa: si el campo ciudad quedó vacío pero hay lat/lon,
+// completa "Ciudad, País" automáticamente para que el lugar aparezca siempre.
+async function ensureCity(pfx){
+  pfx=pfx||"";
+  const el=$(pfx+"city"); if(!el || el.value.trim()) return;
+  const la=parseFloat($(pfx+"lat").value), lo=parseFloat($(pfx+"lon").value);
+  if(isNaN(la)||isNaN(lo)) return;
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&addressdetails=1&lat="+la+"&lon="+lo,{headers:{"Accept":"application/json"}});
+    const d=await r.json(); const a=d.address||{};
+    const loc=a.city||a.town||a.village||a.municipality||a.county||a.state||"";
+    const pais=a.country||"";
+    const s=[loc,pais].filter(Boolean).join(", ");
+    if(s) el.value=s;
+  }catch(e){}
+}
 
 // Cabecera con datos que se dibuja sobre la rueda (sin taparla)
 // Formato del título: "Nombre Apellido, Mmm DD. AAAA — Tipo"
@@ -389,9 +405,13 @@ function setType(t){
 }
 
 async function calcular(){
-  const base=getBase();
+  let base=getBase();
   if(!base.date){ setStatus("Completa la fecha de nacimiento.",true); return; }
   if(isNaN(base.lat)||isNaN(base.lon)){ setStatus("Completa latitud y longitud (o busca la ciudad).",true); return; }
+  // Completa el lugar automáticamente si viene vacío (desde lat/lon)
+  await ensureCity("");
+  if(currentType==="combined") await ensureCity("b_");
+  base=getBase();
   let endpoint, body;
   if(currentType==="natal"){ endpoint="/api/natal"; body=bd(base); }
   else if(currentType==="transit"){
