@@ -59,6 +59,10 @@
     border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
   .tbtn:hover{border-color:var(--gold)}
   .tbtn.active{background:var(--gold);color:#0B1030;border-color:var(--gold)}
+  .tbtn-soon{opacity:.55;cursor:not-allowed;border-style:dashed}
+  .tbtn-soon:hover{border-color:var(--border)}
+  .tbtn-soon .soon{font-size:10px;font-weight:600;color:var(--gold);border:1px solid var(--gold);
+    border-radius:8px;padding:1px 6px;margin-left:6px;vertical-align:middle}
   .subblk{border-top:1px dashed var(--border);margin-top:14px;padding-top:12px}
   .subblk h2{color:var(--silver)}
   .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin:0}
@@ -87,6 +91,8 @@
     <button type="button" class="tbtn" data-type="solar_return">☀ Retorno solar</button>
     <button type="button" class="tbtn" data-type="progressed">◑ Progresada</button>
     <button type="button" class="tbtn" data-type="combined">⊕ Combinada</button>
+    <button type="button" class="tbtn tbtn-soon" id="btnAkashic" disabled
+            title="Próximamente">📜 Registros Akáshicos <span class="soon">próximamente</span></button>
   </div>
   <div class="card">
     <h2 id="baseTitle">Datos de nacimiento</h2>
@@ -280,6 +286,16 @@ function getBase(){
 }
 function bd(o){ return {date:o.date,time:o.time,lat:o.lat,lon:o.lon,tz:o.tz}; }
 
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
+  "septiembre","octubre","noviembre","diciembre"];
+function fFecha(iso){ if(!iso) return ""; const p=String(iso).split("-");
+  if(p.length<3) return iso; return (+p[2])+" de "+(MESES[(+p[1])-1]||"")+" de "+p[0]; }
+// Cabecera con datos que se dibuja sobre la rueda (sin taparla)
+function infoDe(o){
+  const sub=[o.time, fFecha(o.date), o.city].filter(Boolean).join("  ·  ");
+  return {title:(o.name||"").trim(), sub};
+}
+
 async function buscarCiudad(pfx){
   pfx=pfx||"";
   const q=$(pfx+"city").value.trim();
@@ -421,25 +437,29 @@ function renderResult(type,data){
   }
   $("wheelTitle").textContent=titulo;
   fillTable(primaryChart(type,data));
+  const baseInfo = infoDe({name:nm, time:$("time").value, date:$("date").value, city:$("city").value});
   let html;
   if(type==="transit"){
-    html=`<div class="wheelbox"><div class="cap">Bi-rueda · natal (interior) + tránsitos (exterior)</div>${buildWheelSVG(data.natal,"dark",data.transit.planets)}</div>`;
+    html=`<div class="wheelbox"><div class="cap">Bi-rueda · natal (interior) + tránsitos (exterior)</div>${buildWheelSVG(data.natal,"dark",data.transit.planets,baseInfo)}</div>`;
   }else if(type==="solar_return"||type==="progressed"){
     const der=(type==="solar_return")?data.solar_return:data.progressed;
-    const cap=(type==="solar_return")?"Retorno solar":"Progresada";
+    let derInfo;
+    if(type==="solar_return"){
+      const si=(data.solar_return&&data.solar_return.input)||{};
+      const rplace=($("r_reloc").checked?$("r_city").value.trim():"")||$("city").value.trim();
+      derInfo={title:"Retorno solar", sub:[rplace, si.return_local||""].filter(Boolean).join("  ·  ")};
+    }else{
+      derInfo={title:"Progresada", sub:($("p_date").value?("a "+fFecha($("p_date").value)):"")};
+    }
     html=`<div class="wheelrow">
-      <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,"dark")}</div>
-      <div class="wheelbox"><div class="cap">${cap}</div>${buildWheelSVG(der,"dark")}</div></div>`;
+      <div class="wheelbox"><div class="cap">Natal</div>${buildWheelSVG(data.natal,"dark",null,baseInfo)}</div>
+      <div class="wheelbox"><div class="cap">${derInfo.title}</div>${buildWheelSVG(der,"dark",null,derInfo)}</div></div>`;
   }else if(type==="combined"){
-    const fmtP=(o,def)=>{ const d=(o.date||""); const t=(o.time||""); const c=(o.city||"");
-      return [def, [t,d].filter(Boolean).join(" · "), c].filter(Boolean).join(" — "); };
-    const p1=fmtP({date:$("date").value,time:$("time").value,city:$("city").value}, nm||"Persona 1");
-    const p2=fmtP({date:$("b_date").value,time:$("b_time").value,city:$("b_city").value}, $("b_name").value.trim()||"Persona 2");
-    html=`<div class="cap" style="color:var(--muted);font-size:12.5px;margin-bottom:8px;line-height:1.7">
-        <b style="color:var(--gold)">${p1}</b><br><span style="color:var(--gold)">+</span> ${p2}</div>
-      <div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(data.combined,"dark")}</div>`;
+    const nb=$("b_name").value.trim();
+    const combInfo={title:(nm||"Persona 1")+"   +   "+(nb||"Persona 2"), sub:""};
+    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(data.combined,"dark",null,combInfo)}</div>`;
   }else{
-    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(primaryChart(type,data),"dark")}</div>`;
+    html=`<div class="wheelbox" style="max-width:560px;margin:0 auto">${buildWheelSVG(primaryChart(type,data),"dark",null,baseInfo)}</div>`;
   }
   $("wheelWrap").innerHTML=html;
 }
@@ -448,7 +468,7 @@ function lonSignIdx(lon){ return Math.floor((((lon%360)+360)%360)/30); }
 // ── Rueda estilo clásico con los íconos propios ─────────────────────────
 // theme "dark": pantalla (fondo azul noche, chips claros bajo los íconos)
 // theme "light": para el reporte (fondo blanco, trazos oscuros)
-function buildWheelSVG(data, theme, outer){
+function buildWheelSVG(data, theme, outer, info){
   const dark = theme==="dark";
   const LINE = dark ? "#6E78A8" : "#1A1A29";
   const LINE2= dark ? "#4A5590" : "#1A1A29";
@@ -459,6 +479,9 @@ function buildWheelSVG(data, theme, outer){
     ? {Opposition:"#E06060",Trine:"#6FA0FF",Square:"#D8DCEF",Sextile:"#58C98A"}
     : {Opposition:"#CC0000",Trine:"#0000CC",Square:"#000000",Sextile:"#00990A"};
   const S=outer?560:500, C=S/2, asc=data.angles.asc.lon;
+  const HB = (info && (info.title||info.sub)) ? Math.round(S*0.135) : 0;
+  const H = S + HB;
+  const escx = t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const ang = lon => (180 + asc - lon) * Math.PI/180;
   const pt = (lon,r) => [C + r*Math.cos(ang(lon)), C + r*Math.sin(ang(lon))];
   const img = (key,lon,r,size,thin)=>{
@@ -469,8 +492,15 @@ function buildWheelSVG(data, theme, outer){
     if(!src) return "";
     return `<image x="${x-size/2}" y="${y-size/2}" width="${size}" height="${size}" href="${src}" xlink:href="${src}"/>`;
   };
-  let s = `<svg id="wheelSvg" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
-  s += `<rect width="${S}" height="${S}" fill="${dark?'#0C1233':'#FFFFFF'}"/>`;
+  const bg = dark?'#0C1233':'#FFFFFF';
+  let s = `<svg id="wheelSvg" viewBox="0 0 ${S} ${H}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
+  s += `<rect width="${S}" height="${H}" fill="${bg}"/>`;
+  if(HB){
+    const gc = dark?'#C9A24B':'#1E2450', tc = dark?'#DBE1F3':'#26304F';
+    if(info.title) s+=`<text x="${S/2}" y="${(HB*0.44).toFixed(1)}" font-size="${(S*0.044).toFixed(1)}" font-weight="bold" fill="${gc}" text-anchor="middle" dominant-baseline="middle">${escx(info.title)}</text>`;
+    if(info.sub)   s+=`<text x="${S/2}" y="${(HB*0.80).toFixed(1)}" font-size="${(S*0.032).toFixed(1)}" fill="${tc}" text-anchor="middle" dominant-baseline="middle">${escx(info.sub)}</text>`;
+  }
+  s += `<g transform="translate(0,${HB})">`;
   [200,180,160,80,70].forEach(r=>{
     s+=`<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="${LINE}" stroke-width="1"/>`;
   });
@@ -526,7 +556,7 @@ function buildWheelSVG(data, theme, outer){
       s+=`<text x="${dx}" y="${dy}" font-size="7" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
     });
   }
-  s+=`</svg>`;
+  s+=`</g></svg>`;
   return s;
 }
 
@@ -564,27 +594,44 @@ function svgToImg(xml){
   });
 }
 async function renderOneWheel(xml, size){
+  // Respeta la proporción del viewBox (la cabecera de datos añade alto)
+  const m=xml.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+  const vbw=m?+m[1]:1, vbh=m?+m[2]:1;
+  const w=size, h=Math.round(size*vbh/vbw);
   const im=await svgToImg(xml);
-  const cv=document.createElement("canvas"); cv.width=size; cv.height=size;
-  const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,size,size);
-  if(im) ctx.drawImage(im,0,0,size,size);
+  const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+  const ctx=cv.getContext("2d"); ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,w,h);
+  if(im) ctx.drawImage(im,0,0,w,h);
   return cv.toDataURL("image/png");
 }
 // Devuelve {main, second}. En retorno/progresada son dos ruedas independientes
 // (grandes); en el resto, second queda null.
 async function wheelToPng(size){
-  const type=lastType, data=lastResult;
+  const type=lastType, data=lastResult, base=lastBase||{};
   if(!data) return {main:null, second:null};
+  const baseInfo = infoDe({name:base.name, time:base.time, date:base.date, city:base.city});
   if(type==="solar_return"||type==="progressed"){
     const der=(type==="solar_return")?data.solar_return:data.progressed;
-    const main   = await renderOneWheel(buildWheelSVG(data.natal,"light"), size);
-    const second = await renderOneWheel(buildWheelSVG(der,"light"), size);
+    let derInfo;
+    if(type==="solar_return"){
+      const si=(data.solar_return&&data.solar_return.input)||{};
+      const rplace=($("r_reloc").checked?$("r_city").value.trim():"")||(base.city||"");
+      derInfo={title:"Retorno solar", sub:[rplace, si.return_local||""].filter(Boolean).join("  ·  ")};
+    }else{
+      derInfo={title:"Progresada", sub:($("p_date").value?("a "+fFecha($("p_date").value)):"")};
+    }
+    const main   = await renderOneWheel(buildWheelSVG(data.natal,"light",null,baseInfo), size);
+    const second = await renderOneWheel(buildWheelSVG(der,"light",null,derInfo), size);
     return {main, second};
   }
   let xml;
-  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets);
-  else if(type==="combined") xml=buildWheelSVG(data.combined,"light");
-  else xml=buildWheelSVG(data,"light");
+  if(type==="transit") xml=buildWheelSVG(data.natal,"light",data.transit.planets,baseInfo);
+  else if(type==="combined"){
+    const nb=$("b_name").value.trim();
+    const combInfo={title:(base.name||"Persona 1")+"   +   "+(nb||"Persona 2"), sub:""};
+    xml=buildWheelSVG(data.combined,"light",null,combInfo);
+  }
+  else xml=buildWheelSVG(data,"light",null,baseInfo);
   const main=await renderOneWheel(xml, size);
   return {main, second:null};
 }
