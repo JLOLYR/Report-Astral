@@ -307,6 +307,15 @@ const DECAN_RULERS = [
   ["aJupiter","aMarte","aSol"],   ["aSaturno","aVenus","aChiron"],
   ["aUrano","aMercurio","aVenus"],["aNeptuno","aLuna","aPluton"]];
 
+// Color del punto que marca el grado EXACTO de cada planeta en la rueda
+// (desacopla la posición real de la dibujada cuando el glifo se corre).
+const PLANET_DOT = {
+  aSol:"#E0A93B", aLuna:"#AEB6D6", aMercurio:"#6FB7A0", aVenus:"#E58AB0",
+  aMarte:"#E06A5A", aJupiter:"#D8A24B", aSaturno:"#9A93B8", aUrano:"#5FA8E0",
+  aNeptuno:"#5FC9C9", aPluton:"#B06AD0", aChiron:"#A0A050",
+  aNoduloNorte:"#8AA0C0", aLunaNegra:"#7A6A9A", aRuedaFortuna:"#C9A24B"};
+const dotColor = k => PLANET_DOT[k] || "#8890B0";
+
 const $ = id => document.getElementById(id);
 function setStatus(msg, err){ const s=$("status"); s.textContent=msg||""; s.className="status"+(err?" err":""); }
 function icn(key, cls){ const src=(ICONS_D[key]||ICONS[key]); return src ? `<img class="icn ${cls||''}" src="${src}" alt="">` : ""; }
@@ -645,8 +654,18 @@ function buildWheelSVG(data, theme, outer, info){
     const [x1,y1]=pt(pos[a.a],70),[x2,y2]=pt(pos[a.b],70);
     s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ASP[a.type]||'#666'}" stroke-width="1"/>`;
   });
+  // Separación mínima calculada por anillo: arco(ancho,radio)=2·atan((w/2)/r).
+  // Manda el glifo (gapGlifos) porque en ambos anillos supera a gapEtiquetas.
+  const arcDeg = (w,r)=> 2*Math.atan((w/2)/r)*180/Math.PI;
+  const MAIN_SEP  = Math.max(arcDeg(22,141), arcDeg(12,109)) + 0.4;  // ≈9.32°
+  const OUTER_SEP = arcDeg(20,228) + 0.4;                           // ≈5.42°
   const lons = data.planets.map(p=>p.lon);
-  const shown = adjustAngles(lons, 7.5);
+  const shown = adjustAngles(lons, MAIN_SEP);
+  // Anillo de puntos: marca el grado EXACTO (usa p.lon, no el corrido).
+  data.planets.forEach(p=>{
+    const [ex,ey]=pt(p.lon,157);
+    s+=`<circle cx="${ex}" cy="${ey}" r="2.4" fill="${dotColor(p.key)}" stroke="${bg}" stroke-width="0.6"/>`;
+  });
   data.planets.forEach((p,i)=>{
     const a = shown[i];
     s += img(p.key, a, 141, 22, true);
@@ -665,9 +684,11 @@ function buildWheelSVG(data, theme, outer, info){
   putLbl("Ac",asc); putLbl("Mc",data.angles.mc.lon);
   if(outer && outer.length){
     // Planetas en tránsito alrededor de la carta natal (sin aro decorativo)
-    const osh=adjustAngles(outer.map(p=>p.lon), 7.5);
+    const osh=adjustAngles(outer.map(p=>p.lon), OUTER_SEP);
     outer.forEach((p,i)=>{
       const a=osh[i];
+      const [ex,ey]=pt(p.lon,244);
+      s+=`<circle cx="${ex}" cy="${ey}" r="2.3" fill="${dotColor(p.key)}" stroke="${bg}" stroke-width="0.6"/>`;
       s += img(p.key, a, 228, 20, true);
       const [dx,dy]=pt(a,211);
       s+=`<text x="${dx}" y="${dy}" font-size="7" fill="${TXT}" text-anchor="middle" dominant-baseline="central">${p.deg}°${p.retrograde?"R":""}</text>`;
@@ -677,25 +698,39 @@ function buildWheelSVG(data, theme, outer, info){
   return s;
 }
 
+// Separación angular anti-solape que PRESERVA el orden circular y no encoge
+// glifos ni cambia el radio. Método: cortar el círculo en el hueco mayor,
+// desenrollar en línea, empujar hacia adelante hasta respetar minSep y
+// recentrar en la media original (mínimo desplazamiento). Devuelve las
+// longitudes ajustadas para DIBUJO (el grado real se mantiene aparte).
 function adjustAngles(lons, minSep){
-  const idx = lons.map((l,i)=>[l,i]).sort((a,b)=>a[0]-b[0]);
-  const adj = idx.map(x=>x[0]);
-  for(let pass=0; pass<40; pass++){
-    let moved=false;
-    for(let i=0;i<adj.length;i++){
-      const j=(i+1)%adj.length;
-      let gap = adj[j]-adj[i]; if(j===0) gap+=360;
-      if(gap < minSep){
-        const push=(minSep-gap)/2;
-        adj[i]-=push; adj[j]+=push;
-        if(j===0) adj[j]-=360;
-        moved=true;
-      }
-    }
-    if(!moved) break;
+  const n = lons.length;
+  if(n <= 1) return lons.slice();
+  const idx = lons.map((v,i)=>i).sort((a,b)=> lons[a]-lons[b]);
+  const s = idx.map(i=>lons[i]);                 // longitudes ordenadas
+  // hueco circular mayor → cortamos justo después de él
+  let maxg=-1, cut=0;
+  for(let k=0;k<n;k++){
+    const g = (k<n-1) ? (s[k+1]-s[k]) : (s[0]+360 - s[n-1]);
+    if(g>maxg){ maxg=g; cut=(k+1)%n; }
   }
-  const out = new Array(lons.length);
-  idx.forEach((x,k)=>{ out[x[1]] = ((adj[k]%360)+360)%360; });
+  // desenrollar la secuencia lineal a partir del corte
+  const seq=[]; for(let k=0;k<n;k++) seq.push((cut+k)%n);
+  const orig=new Array(n); orig[0]=s[seq[0]];
+  for(let k=1;k<n;k++){ let v=s[seq[k]]; while(v < orig[k-1]) v+=360; orig[k]=v; }
+  // empujar hacia adelante para respetar minSep (isotónico simple)
+  const P=orig.slice();
+  for(let k=1;k<n;k++) if(P[k] < P[k-1]+minSep) P[k]=P[k-1]+minSep;
+  // caso extremo: no cabe ni repartido → distribuir uniforme
+  if(n*minSep > 360){
+    const step=360/n;
+    for(let k=0;k<n;k++) P[k]=orig[0]+k*step;
+  }
+  // recentrar sobre la media original (minimiza el desplazamiento total)
+  let so=0, sn=0; for(let k=0;k<n;k++){ so+=orig[k]; sn+=P[k]; }
+  const shift=(so-sn)/n;
+  const out=new Array(n);
+  for(let k=0;k<n;k++) out[idx[seq[k]]] = ((P[k]+shift)%360+360)%360;
   return out;
 }
 
