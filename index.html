@@ -201,6 +201,18 @@
         <div style="display:flex;align-items:flex-end">
           <button class="sec" type="button" id="btnPHoy">📅 Hasta hoy</button></div>
       </div>
+      <div style="margin-top:8px">
+        <label class="chk"><input type="checkbox" id="p_reloc"> Relocalizar (calcular en otro lugar)</label>
+      </div>
+      <div id="p_locblk" class="hidden" style="margin-top:8px">
+        <div class="row"><input id="p_city" list="citylist" placeholder="Ciudad de la progresión">
+          <button class="sec" type="button" onclick="buscarCiudad('p_')">🔍</button></div>
+        <div class="grid" style="margin-top:8px">
+          <div><label>Latitud</label><input id="p_lat"></div>
+          <div><label>Longitud</label><input id="p_lon"></div>
+          <div><label>Zona horaria</label><input id="p_tz" placeholder="America/Bogota"></div>
+        </div>
+      </div>
     </div>
 
     <div id="blk_combined" class="subblk hidden">
@@ -455,7 +467,12 @@ async function calcular(){
   else if(currentType==="progressed"){
     if(!$("p_date").value){ setStatus("Completa la fecha objetivo.",true); return; }
     endpoint="/api/progressed";
-    body={natal:bd(base), target_date:$("p_date").value};
+    body={natal:bd(base), target_date:$("p_date").value,
+      reloc: ($("p_reloc").checked && !isNaN(numv("p_lat")))
+        ? {lat:numv("p_lat"), lon:numv("p_lon"),
+           tz:($("p_tz")?$("p_tz").value.trim():"")||base.tz,
+           city:($("p_city")?$("p_city").value.trim():"")}
+        : null};
   }
   else {
     if(!$("b_date").value||isNaN(numv("b_lat"))){ setStatus("Completa los datos de la Persona 2.",true); return; }
@@ -1031,6 +1048,8 @@ if($("b_city")) $("b_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e
 // Relocalización: mostrar/ocultar bloque de lugar
 if($("t_reloc")) $("t_reloc").addEventListener("change",e=>$("t_locblk").classList.toggle("hidden",!e.target.checked));
 if($("r_reloc")) $("r_reloc").addEventListener("change",e=>$("r_locblk").classList.toggle("hidden",!e.target.checked));
+if($("p_reloc")) $("p_reloc").addEventListener("change",e=>$("p_locblk").classList.toggle("hidden",!e.target.checked));
+if($("p_city")) $("p_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("p_");}});
 
 // Tránsito de hoy
 if($("btnTHoy")) $("btnTHoy").addEventListener("click",()=>{
