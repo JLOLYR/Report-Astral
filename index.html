@@ -171,7 +171,7 @@
         <div class="grid3" style="margin-top:8px">
           <div><label>Latitud</label><input id="t_lat"></div>
           <div><label>Longitud</label><input id="t_lon"></div>
-          <div><label>Zona horaria</label><input id="t_tz" placeholder="America/Santiago"></div>
+          <div><label>Zona horaria</label><input id="t_tz" list="tzlist" placeholder="America/Santiago"></div>
         </div>
       </div>
     </div>
@@ -189,7 +189,7 @@
         <div class="grid" style="margin-top:8px">
           <div><label>Latitud</label><input id="r_lat"></div>
           <div><label>Longitud</label><input id="r_lon"></div>
-          <div><label>Zona horaria</label><input id="r_tz" placeholder="America/Bogota"></div>
+          <div><label>Zona horaria</label><input id="r_tz" list="tzlist" placeholder="America/Bogota"></div>
         </div>
       </div>
     </div>
@@ -210,7 +210,7 @@
         <div class="grid" style="margin-top:8px">
           <div><label>Latitud</label><input id="p_lat"></div>
           <div><label>Longitud</label><input id="p_lon"></div>
-          <div><label>Zona horaria</label><input id="p_tz" placeholder="America/Bogota"></div>
+          <div><label>Zona horaria</label><input id="p_tz" list="tzlist" placeholder="America/Bogota"></div>
         </div>
       </div>
     </div>
@@ -219,7 +219,7 @@
       <h2>Persona 2</h2>
       <div class="grid">
         <div><label>Nombre</label><input id="b_name" placeholder="Ej: Juan"></div>
-        <div><label>Zona horaria (IANA)</label><input id="b_tz" value="America/Santiago"></div>
+        <div><label>Zona horaria (IANA)</label><input id="b_tz" list="tzlist" value="America/Santiago"></div>
       </div>
       <div class="grid" style="margin-top:8px">
         <div><label>Fecha</label><input id="b_date" type="date"></div>
@@ -416,6 +416,13 @@ async function buscarCiudad(pfx){
     const pais=ad.country||"";
     $(pfx+"city").value=[loc,pais].filter(Boolean).join(", ")||q;
     setStatus("Ubicación: "+arr[0].display_name);
+    // Autocompletar la zona horaria IANA a partir de las coordenadas
+    if($(pfx+"tz")){
+      try{
+        const tzr=await fetch("https://timeapi.io/api/TimeZone/coordinate?latitude="+arr[0].lat+"&longitude="+arr[0].lon);
+        if(tzr.ok){ const tj=await tzr.json(); if(tj&&tj.timeZone){ $(pfx+"tz").value=tj.timeZone; } }
+      }catch(_){}
+    }
   }catch(e){ setStatus("No se pudo buscar la ciudad. Escribe latitud y longitud a mano.",true); }
 }
 
@@ -1050,6 +1057,15 @@ if($("t_reloc")) $("t_reloc").addEventListener("change",e=>$("t_locblk").classLi
 if($("r_reloc")) $("r_reloc").addEventListener("change",e=>$("r_locblk").classList.toggle("hidden",!e.target.checked));
 if($("p_reloc")) $("p_reloc").addEventListener("change",e=>$("p_locblk").classList.toggle("hidden",!e.target.checked));
 if($("p_city")) $("p_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("p_");}});
+
+// Llenar el desplegable de zonas horarias con TODAS las IANA disponibles
+try{
+  if(typeof Intl!=="undefined" && Intl.supportedValuesOf){
+    const zs=Intl.supportedValuesOf("timeZone");
+    const dl=$("tzlist");
+    if(dl && zs && zs.length){ dl.innerHTML = zs.map(z=>"<option>"+z+"</option>").join(""); }
+  }
+}catch(_){}
 
 // Tránsito de hoy
 if($("btnTHoy")) $("btnTHoy").addEventListener("click",()=>{
