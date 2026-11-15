@@ -118,6 +118,7 @@
   <div class="typebar">
     <button type="button" class="tbtn active" data-type="natal">✦ Natal</button>
     <button type="button" class="tbtn" data-type="transit">☿ Tránsitos</button>
+    <button type="button" class="tbtn" data-type="weekly">🗓 Semanal</button>
     <button type="button" class="tbtn" data-type="solar_return">☀ Retorno solar</button>
     <button type="button" class="tbtn" data-type="progressed">◑ Progresada</button>
     <button type="button" class="tbtn" data-type="combined">⊕ Combinada</button>
@@ -211,6 +212,29 @@
           <div><label>Latitud</label><input id="p_lat"></div>
           <div><label>Longitud</label><input id="p_lon"></div>
           <div><label>Zona horaria</label><input id="p_tz" list="tzlist" placeholder="America/Bogota"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="blk_weekly" class="subblk hidden">
+      <h2>Tránsitos de la semana</h2>
+      <div class="grid">
+        <div><label>Semana (elige cualquier día; se calcula desde el lunes a las 00:00)</label><input id="w_date" type="date"></div>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <button class="sec" type="button" id="btnWHoy">📅 Esta semana</button>
+          <button class="sec" type="button" id="btnWSig">⏭ Próxima semana</button></div>
+      </div>
+      <div id="w_info" style="margin-top:6px;color:var(--faint);font-size:.9em"></div>
+      <div style="margin-top:8px">
+        <label class="chk"><input type="checkbox" id="w_reloc"> Relocalizar (calcular la semana en otro lugar)</label>
+      </div>
+      <div id="w_locblk" class="hidden" style="margin-top:8px">
+        <div class="row"><input id="w_city" list="citylist" placeholder="Ciudad donde pasarás la semana">
+          <button class="sec" type="button" onclick="buscarCiudad('w_')">🔍</button></div>
+        <div class="grid" style="margin-top:8px">
+          <div><label>Latitud</label><input id="w_lat"></div>
+          <div><label>Longitud</label><input id="w_lon"></div>
+          <div><label>Zona horaria</label><input id="w_tz" list="tzlist" placeholder="America/Bogota"></div>
         </div>
       </div>
     </div>
@@ -430,15 +454,15 @@ async function buscarCiudad(pfx){
 let currentType="natal", lastType="natal", lastResult=null, lastBase=null, lastPayload=null;
 const TYPE_LABEL={natal:"Datos de nacimiento",transit:"Datos natales (persona base)",
   solar_return:"Datos natales (persona base)",progressed:"Datos natales (persona base)",combined:"Persona 1",
-  akashic:"Datos de nacimiento"};
+  akashic:"Datos de nacimiento",weekly:"Datos natales (persona base)"};
 const CALC_LABEL={natal:"✦ Calcular carta",transit:"☿ Calcular tránsitos",
   solar_return:"☀ Calcular retorno solar",progressed:"◑ Calcular progresada",combined:"⊕ Calcular combinada",
-  akashic:"📜 Calcular Registros Akáshicos"};
+  akashic:"📜 Calcular Registros Akáshicos",weekly:"🗓 Calcular semana"};
 function setType(t){
   currentType=t;
   document.querySelectorAll(".tbtn").forEach(b=>b.classList.toggle("active",b.dataset.type===t));
   $("baseTitle").textContent=TYPE_LABEL[t];
-  ["transit","solar_return","progressed","combined"].forEach(k=>$("blk_"+k).classList.toggle("hidden",k!==t));
+  ["transit","weekly","solar_return","progressed","combined"].forEach(k=>$("blk_"+k).classList.toggle("hidden",k!==t));
   $("btnCalc").textContent=CALC_LABEL[t];
 }
 
@@ -459,6 +483,16 @@ async function calcular(){
     const ttz = $("t_tz").value.trim() || base.tz;
     endpoint="/api/transits";
     body={natal:bd(base), transit:{date:$("t_date").value,time:$("t_time").value||"12:00",lat:tlat,lon:tlon,tz:ttz}};
+  }
+  else if(currentType==="weekly"){
+    if(!$("w_date").value){ setStatus("Elige la semana (cualquier día de ella).",true); return; }
+    endpoint="/api/weekly";
+    body={natal:bd(base), week_date:$("w_date").value,
+      reloc: ($("w_reloc").checked && !isNaN(numv("w_lat")))
+        ? {lat:numv("w_lat"), lon:numv("w_lon"),
+           tz:($("w_tz")?$("w_tz").value.trim():"")||base.tz,
+           city:($("w_city")?$("w_city").value.trim():"")}
+        : null};
   }
   else if(currentType==="solar_return"){
     const yr=parseInt($("r_year").value);
@@ -495,7 +529,7 @@ async function calcular(){
     lastType=currentType; lastResult=data; lastBase=base;
     lastPayload = (currentType==="natal"||currentType==="akashic") ? {natal:body} : body;
     renderResult(currentType,data);
-    setStatus("Carta calculada.");
+    setStatus(currentType==="weekly" ? "Semana calculada. Descarga el reporte para ver el resumen." : "Carta calculada.");
     stopBar(true);
   }catch(e){ setStatus("No se pudo conectar con la API: "+e.message,true); stopBar(false); }
 }
@@ -549,8 +583,9 @@ function fillTable(chart){
 function renderResult(type,data){
   $("result").classList.remove("hidden");
   const nm=$("name").value.trim();
-  const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada",akashic:"Registros Akáshicos"};
+  const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada",akashic:"Registros Akáshicos",weekly:"Tránsitos de la semana"};
   let titulo = titles[type];
+  if(type==="weekly" && data.week) titulo += " (" + semanaTxt(data.week.start) + ")";
   if(type==="combined"){
     const nb=$("b_name").value.trim();
     titulo += (nm||nb) ? (" · " + (nm||"Persona 1") + " + " + (nb||"Persona 2")) : "";
@@ -558,9 +593,30 @@ function renderResult(type,data){
     titulo += nm ? (" · "+nm) : "";
   }
   $("wheelTitle").textContent=titulo;
+  type=dispT(type);
   fillTable(primaryChart(type,data));
   const html = wheelsHTML(type, data, "dark");
   $("wheelWrap").innerHTML=html;
+}
+// El semanal se dibuja en pantalla igual que un tránsito (bi-rueda del lunes 00:00)
+function dispT(t){ return t==="weekly" ? "transit" : t; }
+function lunesDe(iso){
+  const p=iso.split("-").map(Number); const d=new Date(p[0],p[1]-1,p[2]);
+  d.setDate(d.getDate()-((d.getDay()+6)%7)); return d;
+}
+function isoDe(d){ const p=x=>String(x).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function semanaTxt(iso){
+  const M=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const a=lunesDe(iso), b=new Date(a); b.setDate(a.getDate()+6);
+  return "lun "+a.getDate()+" "+M[a.getMonth()]+" – dom "+b.getDate()+" "+M[b.getMonth()]+" "+b.getFullYear();
+}
+function updWInfo(){
+  const v=$("w_date").value; if(!v){ $("w_info").textContent=""; return; }
+  const M=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const a=lunesDe(v);
+  const rel=$("w_reloc").checked && $("w_city").value.trim();
+  const lugar=rel ? $("w_city").value.trim() : ($("city").value.trim()||"su lugar natal");
+  $("w_info").textContent="Semana: "+semanaTxt(v)+". Se calculará para el lunes "+a.getDate()+" "+M[a.getMonth()]+" a las 00:00, hora local de "+lugar+(rel?" (relocalizado: cambian las casas, no los planetas natales).":".");
 }
 const TIPO_CORTO={natal:"Carta Natal",transit:"Tránsitos",solar_return:"Retorno Solar",progressed:"Progresada",combined:"Carta Combinada"};
 // Devuelve la(s) rueda(s) con sus cabeceras. theme "dark" (pantalla) o "light" (reporte).
@@ -783,7 +839,7 @@ async function renderOneWheel(xml, size){
 // Devuelve {main, second}. En retorno/progresada son dos ruedas independientes
 // (grandes); en el resto, second queda null.
 async function wheelToPng(size){
-  const type=lastType, data=lastResult;
+  const type=dispT(lastType), data=lastResult;
   if(!data) return {main:null, second:null};
   const inf=wheelInfos(type,data);
   if(type==="solar_return"||type==="progressed"){
@@ -924,7 +980,7 @@ function refreshSavedSel(){
   });
   if(keys.includes(prev)) sel.value=prev;
 }
-const TYPE_ES={natal:"Natal",transit:"Tránsito",solar_return:"Retorno",progressed:"Progresada",combined:"Combinada"};
+const TYPE_ES={natal:"Natal",transit:"Tránsito",solar_return:"Retorno",progressed:"Progresada",combined:"Combinada",weekly:"Semanal",akashic:"Akáshicos"};
 function populateBaseSelectors(){
   const saved=loadSaved(); const keys=Object.keys(saved).sort();
   const opts='<option value="">— usar carta guardada —</option>'
@@ -1057,6 +1113,19 @@ if($("t_reloc")) $("t_reloc").addEventListener("change",e=>$("t_locblk").classLi
 if($("r_reloc")) $("r_reloc").addEventListener("change",e=>$("r_locblk").classList.toggle("hidden",!e.target.checked));
 if($("p_reloc")) $("p_reloc").addEventListener("change",e=>$("p_locblk").classList.toggle("hidden",!e.target.checked));
 if($("p_city")) $("p_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("p_");}});
+if($("w_reloc")) $("w_reloc").addEventListener("change",e=>{$("w_locblk").classList.toggle("hidden",!e.target.checked);updWInfo();});
+if($("w_city")) $("w_city").addEventListener("change",updWInfo);
+if($("w_city")) $("w_city").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscarCiudad("w_");}});
+if($("w_date")) $("w_date").addEventListener("change",updWInfo);
+if($("btnWHoy")) $("btnWHoy").addEventListener("click",()=>{
+  $("w_date").value = isoDe(lunesDe(isoDe(new Date()))); updWInfo();
+  setStatus("Semana actual lista. Presiona «Calcular».");
+});
+if($("btnWSig")) $("btnWSig").addEventListener("click",()=>{
+  const d=lunesDe(isoDe(new Date())); d.setDate(d.getDate()+7);
+  $("w_date").value = isoDe(d); updWInfo();
+  setStatus("Próxima semana lista. Presiona «Calcular».");
+});
 
 // Llenar el desplegable de zonas horarias con TODAS las IANA disponibles
 try{
