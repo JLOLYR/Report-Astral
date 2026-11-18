@@ -294,6 +294,21 @@
              title="Nombre del astrólogo que aparece en la portada del reporte">
       <span id="dlStatus" style="color:var(--faint)"></span>
     </div>
+    <div id="wkView" class="card hidden">
+      <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">
+        <h2 id="wkTitle" style="margin:0;flex:1 1 auto">Su semana (esencial)</h2>
+        <button type="button" id="wkMore">🔭 ¿Quiere saber más? Ver el detalle</button>
+        <button type="button" class="sec hidden" id="wkBack">← Volver a la versión esencial</button>
+      </div>
+      <iframe id="wkFrame" title="Reporte semanal"
+              style="width:100%;height:80vh;border:1px solid var(--border);border-radius:10px;margin-top:10px;background:#fff"></iframe>
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="color:var(--faint);font-size:.9em">Si no ve el PDF aquí (por ejemplo en el celular):</span>
+        <button type="button" class="sec" id="wkOpen">↗ Abrir en otra pestaña</button>
+        <button type="button" class="sec" id="wkDlEs">⬇ Esencial (1 pág.)</button>
+        <button type="button" class="sec" id="wkDlFull">⬇ Completo (5 págs.)</button>
+      </div>
+    </div>
     <div class="two">
       <div class="card">
         <h2 id="wheelTitle">Carta natal</h2>
@@ -581,6 +596,7 @@ function fillTable(chart){
   }).join(" &nbsp; ")||"—";
 }
 function renderResult(type,data){
+  if($("wkView")) $("wkView").classList.add("hidden");
   $("result").classList.remove("hidden");
   const nm=$("name").value.trim();
   const titles={natal:"Carta natal",transit:"Tránsitos",solar_return:"Retorno solar",progressed:"Carta progresada",combined:"Carta combinada",akashic:"Registros Akáshicos",weekly:"Tránsitos de la semana"};
@@ -902,6 +918,10 @@ async function descargar(fmt){
       name_b: (lastType==="combined") ? $("b_name").value.trim() : "",
       city_b: (lastType==="combined") ? $("b_city").value.trim() : ""
     }, lastPayload);
+    if(lastType==="weekly" && fmt==="pdf"){
+      await semanalDosPdf(body, dl);
+      return;
+    }
     const r = await postReport(body, dl);
     if(!r){ stopBar(false); return; }
     if(!r.ok){ dl.textContent="Error del servidor ("+r.status+"): "+(await r.text()).slice(0,300); stopBar(false); return; }
@@ -917,6 +937,54 @@ async function descargar(fmt){
   }catch(e){ dl.textContent="No se pudo generar: "+e.message; stopBar(false); }
   finally{ $("btnPdf").disabled=false; $("btnDocx").disabled=false; }
 }
+// ── Reporte semanal: dos PDF (esencial y completo) ──────────────────────
+let wkBlobs={es:null, full:null}, wkNames={es:"", full:""}, wkShow="es";
+async function semanalDosPdf(body, dl){
+  const nm=(lastBase.name||"Reporte_Astral").replace(/\s+/g,"_");
+  dl.textContent="Generando su semana (versión esencial)…";
+  const r1=await postReport(Object.assign({}, body, {part:"esencial"}), dl);
+  if(!r1){ stopBar(false); return; }
+  if(!r1.ok){ dl.textContent="Error del servidor ("+r1.status+"): "+(await r1.text()).slice(0,300); stopBar(false); return; }
+  setWk("es", await r1.blob(), nm+"_semana_esencial.pdf");
+  mostrarWk("es");
+  dl.textContent="Preparando el detalle astrológico…";
+  const r2=await postReport(Object.assign({}, body, {part:"full"}), dl);
+  if(r2 && r2.ok){
+    setWk("full", await r2.blob(), nm+"_semana_completo.pdf");
+    dl.textContent="Listo ✓ (vea abajo la versión esencial)";
+    stopBar(true);
+  }else{
+    dl.textContent="La versión esencial está lista; el detalle no se pudo generar. Intente de nuevo.";
+    stopBar(false);
+  }
+  $("wkMore").disabled=!wkBlobs.full; $("wkDlFull").disabled=!wkBlobs.full;
+}
+function setWk(k, blob, name){
+  if(wkBlobs[k]) URL.revokeObjectURL(wkBlobs[k]);
+  wkBlobs[k]=URL.createObjectURL(blob); wkNames[k]=name;
+}
+function mostrarWk(k){
+  if(!wkBlobs[k]) return;
+  wkShow=k;
+  $("wkView").classList.remove("hidden");
+  // el completo abre directo en la página 2 (portadilla del detalle)
+  $("wkFrame").src = wkBlobs[k] + (k==="full" ? "#page=2" : "");
+  $("wkTitle").textContent = k==="full" ? "Detalle astrológico" : "Su semana (esencial)";
+  $("wkMore").classList.toggle("hidden", k==="full");
+  $("wkBack").classList.toggle("hidden", k!=="full");
+  $("wkView").scrollIntoView({behavior:"smooth", block:"start"});
+}
+function bajarWk(k){
+  if(!wkBlobs[k]) return;
+  const a=document.createElement("a"); a.href=wkBlobs[k]; a.download=wkNames[k];
+  document.body.appendChild(a); a.click(); a.remove();
+}
+if($("wkMore")) $("wkMore").addEventListener("click",()=>mostrarWk("full"));
+if($("wkBack")) $("wkBack").addEventListener("click",()=>mostrarWk("es"));
+if($("wkOpen")) $("wkOpen").addEventListener("click",()=>{ if(wkBlobs[wkShow]) window.open(wkBlobs[wkShow]+(wkShow==="full"?"#page=2":""),"_blank"); });
+if($("wkDlEs")) $("wkDlEs").addEventListener("click",()=>bajarWk("es"));
+if($("wkDlFull")) $("wkDlFull").addEventListener("click",()=>bajarWk("full"));
+
 function type_is_dual(){ return lastType==="solar_return"||lastType==="progressed"; }
 
 // ── Leyenda de símbolos ─────────────────────────────────────────────────
